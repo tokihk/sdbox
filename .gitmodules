@@ -1,3 +1,3 @@
 [submodule "component/src/thirdparty/freertos-kernel"]
-	path = component/src/thirdparty/freertos-kernel
+	path = thirdparty/freertos-kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
