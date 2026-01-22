@@ -1,0 +1,8 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:11:18:xtimer_manager_new	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:16:6:xtimer_manager_delete	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:21:6:xtimer_poll	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:26:10:xtimer_new	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:31:6:xtimer_delete	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:36:8:xtimer_start	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:41:6:xtimer_stop	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xtimer.c:46:8:xtimer_is_running	16	static

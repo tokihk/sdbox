@@ -1,0 +1,10 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:53:13:xgate_udp_lwip_recv	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:60:13:xgate_udp_config_init	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:71:13:xgate_udp_config_deinit	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:75:15:xgate_udp_config_setup	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:116:13:xgate_udp_config_print	72	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:143:15:xgate_udp_open	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:180:15:xgate_udp_close	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:197:13:xgate_udp_poll	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:201:13:xgate_udp_send	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_udp.c:219:1:xgate_udp_class	16	static

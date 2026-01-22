@@ -1,0 +1,3 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xmalloc.c:29:7:xmalloc	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xmalloc.c:34:6:xfree	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/core/xmalloc.c:39:7:xcalloc	24	static

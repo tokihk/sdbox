@@ -1,6 +1,6 @@
 [submodule "component/src/thirdparty/freertos-kernel"]
-	path = thirdparty/freertos-kernel
+	path = src_common/thirdparty/freertos-kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 [submodule "thirdparty/lwip"]
-	path = thirdparty/lwip
+	path = src_common/thirdparty/lwip
 	url = git://git.git.savannah.gnu.org/lwip.git

@@ -1,0 +1,6 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:18:15:xcommand_text2macaddr	56	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:85:15:xcommand_netif_start	136	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:176:15:xcommand_netif_stop	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:185:15:xcommand_netif_list	104	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:264:15:xcommand_netif_reset	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_netif.c:309:8:xcommand_netif	16	static

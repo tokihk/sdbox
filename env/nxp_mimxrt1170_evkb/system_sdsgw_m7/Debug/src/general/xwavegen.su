@@ -1,0 +1,6 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:31:17:xwave_pcm_value_get_sine	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:36:13:xwave_pcm_value_serialize	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:70:13:xwave_form_name_get	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:87:22:xwave_form_type_get	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:104:6:xwave_generate	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xwavegen.c:152:8:xwave_ch_copy	48	static

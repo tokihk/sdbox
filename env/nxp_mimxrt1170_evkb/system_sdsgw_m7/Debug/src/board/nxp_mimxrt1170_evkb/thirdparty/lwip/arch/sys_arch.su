@@ -1,0 +1,12 @@
+C:\root\wsp\wsp_SDSGW\system_sdsgw\env\nxp_mimxrt1170_evkb\system_sdsgw_m7\CMSIS/core_cm7.h:2041:22:__NVIC_SetPriority	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\env\nxp_mimxrt1170_evkb\system_sdsgw_m7\CMSIS/core_cm7.h:2259:26:SysTick_Config	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\env\nxp_mimxrt1170_evkb\system_sdsgw_m7\drivers/fsl_common_arm.h:788:24:DisableGlobalIRQ	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\env\nxp_mimxrt1170_evkb\system_sdsgw_m7\drivers/fsl_common_arm.h:814:20:EnableGlobalIRQ	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:73:6:sys_assert	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:92:7:lwip_rand	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:710:6:time_isr	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:718:6:time_init	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:738:7:sys_now	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:762:12:sys_arch_protect	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:782:6:sys_arch_unprotect	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/arch/sys_arch.c:787:6:sys_check_core_locking	16	static

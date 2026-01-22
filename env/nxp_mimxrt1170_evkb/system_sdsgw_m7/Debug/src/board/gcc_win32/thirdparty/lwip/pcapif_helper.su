@@ -1,0 +1,4 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/lwip/pcapif_helper.c:152:27:pcapifh_linkstate_init	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/lwip/pcapif_helper.c:158:25:pcapifh_linkstate_get	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/lwip/pcapif_helper.c:163:6:pcapifh_linkstate_close	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/lwip/pcapif_helper.c:168:6:pcapifh_init_npcap	4	static

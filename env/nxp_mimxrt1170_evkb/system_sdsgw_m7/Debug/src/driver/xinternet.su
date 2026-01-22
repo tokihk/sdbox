@@ -1,0 +1,6 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:19:13:xinet_lwip_udp_recv	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:28:6:xinet_init	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:32:6:xinet_deinit	4	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:37:8:xinet_udp_open	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:72:6:xinet_udp_close	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xinternet.c:85:8:xinet_udp_send	32	static

@@ -1,0 +1,9 @@
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:15:16:xevent_group_new	8	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:20:6:xevent_group_delete	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:27:10:xevent_group_flags_clear	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:38:10:xevent_group_flags_get	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:49:10:xevent_group_flags_set	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:60:10:xevent_group_flags_wait	40	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:79:10:xevent_group_flags_clear_isr	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:90:10:xevent_group_flags_get_isr	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src/core/xevent_freertos.h:101:10:xevent_group_flags_set_isr	24	static

@@ -1,0 +1,11 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:83:13:xprogram_task_10msec	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:95:13:xprogram_task_100msec	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:107:13:xprogram_task_1000msec	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:119:13:xprogram_task_prompt	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:129:13:xprogram_task_idle	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:138:13:xprogram_system_task_startup	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:181:13:xprogram_startup_task	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:279:6:xprogram_main	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:292:6:xprogram_event_set	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:297:6:xprogram_event_clear	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/xprogram.c:302:6:xprogram_event_wait	16	static

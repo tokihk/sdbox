@@ -1,0 +1,2 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/freertos_kernel/heap_3.c:59:8:pvPortMalloc	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/gcc_win32/thirdparty/freertos_kernel/heap_3.c:83:6:vPortFree	16	static

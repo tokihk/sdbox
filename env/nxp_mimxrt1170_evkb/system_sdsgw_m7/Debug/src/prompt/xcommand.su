@@ -1,0 +1,11 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:22:13:xcommand_print_subcmd_help	128	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:53:15:xcommand_sub_action	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:88:15:xcommand_bdinfo	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:107:8:xcommand_exec	176	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:126:8:xcommand_parse	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:196:8:xcommand_sub_call	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:246:8:xcommand_arg_pop_text	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:265:8:xcommand_arg_pop	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:285:8:xcommand_text2arg	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:330:8:xcommand_text2bin	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand.c:526:10:xcommand_text2uint	32	static

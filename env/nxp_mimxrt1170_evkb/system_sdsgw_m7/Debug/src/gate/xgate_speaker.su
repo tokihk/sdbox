@@ -1,0 +1,11 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:77:13:xgate_speaker_play_data_enqueue	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:109:13:xgate_speaker_play_data_setup	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:159:13:xgate_speaker_config_init	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:173:13:xgate_speaker_config_deinit	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:177:15:xgate_speaker_config_setup	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:230:13:xgate_speaker_config_print	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:236:15:xgate_speaker_open	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:273:15:xgate_speaker_close	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:294:13:xgate_speaker_poll	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:302:13:xgate_speaker_send	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_speaker.c:310:1:xgate_speaker_class	16	static

@@ -1,0 +1,16 @@
+C:\root\wsp\wsp_SDSGW\system_sdsgw\env\nxp_mimxrt1170_evkb\system_sdsgw_m7\drivers/fsl_enet.h:1239:20:ENET_ActiveRead	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:323:14:ethernetif_rx_alloc	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:351:13:ethernetif_rx_free	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:370:6:ethernetif_plat_init	128	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:470:8:ethernetif_base_ptr	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:475:15:ethernetif_get_phy	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:481:6:ethernetif_on_link_up	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:494:6:ethernetif_on_link_down	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:504:23:enet_get_tx_buffer	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:513:14:enet_send_frame	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:554:13:ethernetif_rx_release	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:564:21:ethernetif_rx_frame_to_pbufs	56	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:622:14:ethernetif_linkinput	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:666:7:ethernetif_linkoutput	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:743:7:ethernetif0_init	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/board/nxp_mimxrt1170_evkb/thirdparty/lwip/enet_ethernetif_kinetis.c:776:7:ethernetif1_init	24	static

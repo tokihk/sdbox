@@ -1,0 +1,10 @@
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:75:10:HAL_CODEC_WM8962_Init	32	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:96:10:HAL_CODEC_WM8962_Deinit	16	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:112:10:HAL_CODEC_WM8962_SetFormat	24	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:128:10:HAL_CODEC_WM8962_SetVolume	32	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:184:10:HAL_CODEC_WM8962_SetMute	32	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:214:10:HAL_CODEC_WM8962_SetPower	24	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:233:10:HAL_CODEC_WM8962_SetRecordChannel	24	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:246:10:HAL_CODEC_WM8962_SetRecord	16	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:259:10:HAL_CODEC_WM8962_SetPlay	16	static
+../codec/port/wm8962/fsl_codec_wm8962_adapter.c:274:10:HAL_CODEC_WM8962_ModuleControl	24	static

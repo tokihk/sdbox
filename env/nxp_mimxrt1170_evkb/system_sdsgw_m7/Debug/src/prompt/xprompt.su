@@ -1,0 +1,16 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:45:13:xprompt_data_write	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:59:20:xprompt_text_line_get	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:90:31:xprompt_command_record_block_get	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:108:13:xprompt_command_record	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:122:13:xprompt_vprintf	128	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:143:12:ntshell_user_callback	120	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:172:12:ntshell_data_read	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:188:12:ntshell_data_write	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:193:6:xprompt_init	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:218:6:xprompt_poll	8	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:224:6:xprompt_record_enumeration	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:253:6:xprompt_printf	28	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:271:6:xprompt_print_bin	88	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:305:6:xprompt_print_multiline	128	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:332:6:xprompt_debug_printf	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xprompt.c:349:6:xprompt_debug_print_bin	16	static

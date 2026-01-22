@@ -1,0 +1,8 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:40:17:xpcm_binary_to_value	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:66:13:xpcm_value_to_binary	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:89:17:xpcm_value_format_convert	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:146:6:xpcm_format_convert_init	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:157:8:xpcm_format_convert	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:191:27:xpcm_format_info_get	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:208:23:xpcm_format_type_get	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/general/xpcm.c:232:23:xpcm_format_type_get_from_text	24	static

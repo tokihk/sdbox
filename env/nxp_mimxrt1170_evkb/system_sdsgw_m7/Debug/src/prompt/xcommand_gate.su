@@ -1,0 +1,14 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:29:15:xcommand_gate_setup	184	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:73:15:xcommand_gate_release	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:98:15:xcommand_gate_open	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:123:15:xcommand_gate_close	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:148:15:xcommand_gate_forwarding	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:180:13:xcommand_gate_list_enum	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:219:15:xcommand_gate_list	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:239:13:xcommand_gate_class_enum	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:257:15:xcommand_gate_class	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:287:15:xcommand_gate_monitor_reset	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:298:15:xcommand_gate_monitor_clear	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:323:15:xcommand_gate_monitor_set	112	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:380:8:xcommand_gate_monitor	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/prompt/xcommand_gate.c:401:8:xcommand_gate	16	static

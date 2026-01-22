@@ -1,0 +1,15 @@
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:73:13:xremcon_signal_gpio_init	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:83:20:xremcon_init_board	8	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:90:20:xremcon_deinit_board	4	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:94:22:xremcon_terminal_read_board	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:99:22:xremcon_terminal_write_board	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:104:22:xremcon_gate_monitor_write_board	24	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:109:20:xremcon_signal_out_set_board	16	static
+C:\root\wsp\wsp_SDSGW\system_sdsgw\src\board\nxp_mimxrt1170_evkb/driver/xremcon_board.h:117:20:xremcon_signal_out_toggle_board	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:13:6:xremcon_init	8	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:18:6:xremcon_deinit	8	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:23:8:xremcon_terminal_read	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:35:8:xremcon_terminal_write	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:47:8:xremcon_gate_monitor_write	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:59:6:xremcon_signal_out_set	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/driver/xremcon.c:64:6:xremcon_signal_out_toggle	16	static

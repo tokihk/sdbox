@@ -1,0 +1,13 @@
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:96:13:xgate_wave_gen_wave_buffer_free	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:109:15:xgate_wave_gen_wave_buffer_alloc	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:127:13:xgate_wave_gen_ch_data_init	48	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:161:13:xgate_wave_gen_output_buffer_setup	64	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:189:13:xgate_wave_gen_config_init	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:202:13:xgate_wave_gen_config_deinit	16	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:206:15:xgate_wave_gen_config_setup	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:259:13:xgate_wave_gen_config_print	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:278:15:xgate_wave_gen_open	40	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:323:15:xgate_wave_gen_close	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:348:13:xgate_wave_gen_poll	32	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:367:13:xgate_wave_gen_send	24	static
+C:/root/wsp/wsp_SDSGW/system_sdsgw/src/gate/xgate_wave_gen.c:372:1:xgate_wave_gen_class	16	static
