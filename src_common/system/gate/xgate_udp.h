@@ -8,7 +8,7 @@
 #ifndef XGATE_UDP_H_
 #define XGATE_UDP_H_
 
-#include "gate/xgate.h"
+#include "system/gate/xgate.h"
 
 
 XGATE_CLASS_DECLARATION(udp);

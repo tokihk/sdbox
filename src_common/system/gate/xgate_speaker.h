@@ -8,7 +8,7 @@
 #ifndef XGATE_SPEAKER_H_
 #define XGATE_SPEAKER_H_
 
-#include "gate/xgate.h"
+#include "system/gate/xgate.h"
 
 
 XGATE_CLASS_DECLARATION(speaker);

@@ -8,7 +8,7 @@
 #ifndef XGATE_WAVE_GEN_H_
 #define XGATE_WAVE_GEN_H_
 
-#include "gate/xgate.h"
+#include "system/gate/xgate.h"
 
 
 XGATE_CLASS_DECLARATION(wave_gen);

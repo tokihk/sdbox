@@ -18,7 +18,7 @@
 
 #include "driver/xremcon.h"
 
-#include "xprogram.h"
+#include "system/xprogram.h"
 
 #include <stdio.h>
 

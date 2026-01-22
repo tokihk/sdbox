@@ -9,7 +9,7 @@
 #include "xcommand.h"
 #include "xprompt.h"
 
-#include "gate/xgate.h"
+#include "system/gate/xgate.h"
 
 
 const char XCOMMAND_GATE_EMPTY_TEXT[] = "(Empty)";
