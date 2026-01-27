@@ -14,7 +14,11 @@
 #include "core/xmalloc.h"
 
 #include "board.h"
+
+#if defined(FSL_FEATURE_SOC_DMAMUX_COUNT) && FSL_FEATURE_SOC_DMAMUX_COUNT
 #include "fsl_dmamux.h"
+#endif
+
 #include "fsl_sai_edma.h"
 #include "fsl_codec_common.h"
 #include "fsl_wm8962.h"

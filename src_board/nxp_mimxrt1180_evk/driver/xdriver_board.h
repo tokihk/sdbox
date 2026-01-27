@@ -12,15 +12,160 @@
 
 #include "fsl_common.h"
 #include "fsl_iomuxc.h"
+
+#if defined(FSL_FEATURE_SOC_DMAMUX_COUNT) && FSL_FEATURE_SOC_DMAMUX_COUNT
 #include "fsl_dmamux.h"
+#endif
+
 #include "fsl_edma.h"
 #include "fsl_gpio.h"
 
 #include "pin_mux.h"
 
 
+/* FUNCTION ************************************************************************************************************
+ *
+ * Function Name : BOARD_InitDebugConsolePins, assigned for the Cortex-M33 core.
+ * Description   : Configures pin routing and optionally pin electrical features.
+ *
+ * END ****************************************************************************************************************/
+void BOARD_InitDebugConsolePins(void)
+{
+  CLOCK_EnableClock(kCLOCK_Iomuxc2);          /* Turn on LPCG: LPCG is ON. */
+
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_08_LPUART1_TX,          /* GPIO_AON_08 is configured as LPUART1_TX */
+      0U);                                    /* Software Input On Field: Input Path is determined by functionality */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_09_LPUART1_RX,          /* GPIO_AON_09 is configured as LPUART1_RX */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_09 */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_08_LPUART1_TX,          /* GPIO_AON_08 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_09_LPUART1_RX,          /* GPIO_AON_09 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+}
+
+/* FUNCTION ************************************************************************************************************
+ *
+ * Function Name : BOARD_InitWM8962Pins, assigned for the Cortex-M33 core.
+ * Description   : Configures pin routing and optionally pin electrical features.
+ *
+ * END ****************************************************************************************************************/
+void BOARD_InitWM8962Pins(void)
+{
+  CLOCK_EnableClock(kCLOCK_Iomuxc2);          /* Turn on LPCG: LPCG is ON. */
+
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_15_LPI2C2_SDA,          /* GPIO_AON_15 is configured as LPI2C2_SDA */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_15 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_16_LPI2C2_SCL,          /* GPIO_AON_16 is configured as LPI2C2_SCL */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_16 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_21_SAI1_TX_DATA00,      /* GPIO_AON_21 is configured as SAI1_TX_DATA00 */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_21 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_22_SAI1_TX_SYNC,        /* GPIO_AON_22 is configured as SAI1_TX_SYNC */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_22 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_23_SAI1_TX_BCLK,        /* GPIO_AON_23 is configured as SAI1_TX_BCLK */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_23 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_24_SAI1_MCLK,           /* GPIO_AON_24 is configured as SAI1_MCLK */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_24 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_25_SAI1_RX_DATA00,      /* GPIO_AON_25 is configured as SAI1_RX_DATA00 */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_25 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_26_SAI1_RX_BCLK,        /* GPIO_AON_26 is configured as SAI1_RX_BCLK */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_26 */
+  IOMUXC_SetPinMux(
+      IOMUXC_GPIO_AON_27_SAI1_RX_SYNC,        /* GPIO_AON_27 is configured as SAI1_RX_SYNC */
+      1U);                                    /* Software Input On Field: Force input path of pad GPIO_AON_27 */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_15_LPI2C2_SDA,          /* GPIO_AON_15 PAD functional properties : */
+      0x1AU);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Disable, Highz
+                                                 Pull Up / Down Config. Field: Weak pull up
+                                                 Open Drain Field: Enabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_16_LPI2C2_SCL,          /* GPIO_AON_16 PAD functional properties : */
+      0x1AU);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Disable, Highz
+                                                 Pull Up / Down Config. Field: Weak pull up
+                                                 Open Drain Field: Enabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_21_SAI1_TX_DATA00,      /* GPIO_AON_21 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_22_SAI1_TX_SYNC,        /* GPIO_AON_22 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_23_SAI1_TX_BCLK,        /* GPIO_AON_23 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_24_SAI1_MCLK,           /* GPIO_AON_24 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_25_SAI1_RX_DATA00,      /* GPIO_AON_25 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_26_SAI1_RX_BCLK,        /* GPIO_AON_26 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+  IOMUXC_SetPinConfig(
+      IOMUXC_GPIO_AON_27_SAI1_RX_SYNC,        /* GPIO_AON_27 PAD functional properties : */
+      0x06U);                                 /* Slew Rate Field: Fast Slew Rate
+                                                 Drive Strength Field: high driver
+                                                 Pull / Keep Select Field: Pull Enable
+                                                 Pull Up / Down Config. Field: Weak pull down
+                                                 Open Drain Field: Disabled */
+}
+
 static void xboard_pin_init(void)
 {
+    BOARD_InitBootPins();
+
+    BOARD_InitDebugConsolePins();
+
+    BOARD_InitWM8962Pins();
+
+
 	CLOCK_EnableClock(kCLOCK_Iomuxc);           /* LPCG on: LPCG is ON. */
 	CLOCK_EnableClock(kCLOCK_Iomuxc_Lpsr);      /* LPCG on: LPCG is ON. */
 
@@ -400,6 +545,11 @@ static void xboard_enet_clock_init(void)
 	IOMUXC_GPR->GPR5 |= IOMUXC_GPR_GPR5_ENET1G_RGMII_EN_MASK;	/* bit1:iomuxc_gpr_enet_clk_dir */
 }
 
+static void xboard_pll_init(void)
+{
+
+}
+
 static void xboard_dma_init(void)
 {
 	/* DMAMUX0 initialize */
@@ -459,8 +609,14 @@ static void xboard_enet1g_init(void)
 
 static inline void xdriver_init_board(void)
 {
-	xboard_pin_init();
+	BOARD_CommonSetting();
+
+	BOARD_ConfigMPU();
+
 	xboard_pinmux_init();
+	xboard_pin_init();
+
+	xboard_pll_init();
 
 	xboard_module_clock_init();
 	xboard_enet_clock_init();
