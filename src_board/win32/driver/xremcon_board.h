@@ -150,5 +150,12 @@ static size_t xremcon_gate_monitor_write_board(uint8_t ch, const uint8_t *data, 
 	return (write_size);
 }
 
+static inline void xremcon_signal_out_set_board(uint8_t ch, bool_t on)
+{
+}
+
+static inline void xremcon_signal_out_toggle_board(uint8_t ch)
+{
+}
 
 #endif /* XREMCON_BOARD_H_ */

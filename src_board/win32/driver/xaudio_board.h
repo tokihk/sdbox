@@ -242,11 +242,11 @@ static size_t xaudio_win32_pcm_data_add(const uint8_t *data, size_t data_size)
 	return (add_size);
 }
 
-static inline void xaudio_init_board(const struct xaudio_device_info *dev_list, uint16_t dev_list_count)
+static inline void xaudio_init_board(void)
 {
 }
 
-static inline void xaudio_deinit_board(const struct xaudio_device_info *dev_list, uint16_t dev_list_count)
+static inline void xaudio_deinit_board(void)
 {
 }
 
