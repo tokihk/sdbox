@@ -26,6 +26,9 @@
  */
 int main(void) {
 
+	xprogram_main();
+
+#if 0
     /* Init board hardware. */
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
@@ -46,5 +49,7 @@ int main(void) {
             tight while() loop */
         __asm volatile ("nop");
     }
+#endif
+
     return 0 ;
 }

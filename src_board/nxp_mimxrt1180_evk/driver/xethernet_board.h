@@ -12,7 +12,7 @@
 
 #include "lwip/pbuf.h"
 
-#include "fsl_enet.h"
+#include "netc/fsl_netc.h"
 
 #include "fsl_phyrtl8201.h"
 #include "fsl_phyrtl8211f.h"
@@ -73,12 +73,6 @@ static struct
 } g_xether_enet1g;
 
 
-static phy_rtl8201_resource_t		g_enet_phy_resource;
-static phy_handle_t					g_enet_phy_handle;
-
-static phy_rtl8211f_resource_t		g_enet1g_phy_resource;
-
-
 AT_NONCACHEABLE_SECTION_ALIGN(static enet_tx_bd_struct_t g_xether_enet1g_txdesc[ENET1G_TXBD_NUM], ENET_BUFF_ALIGNMENT);
 AT_NONCACHEABLE_SECTION_ALIGN(static enet_rx_bd_struct_t g_xether_enet1g_rxdesc[ENET1G_RXBD_NUM], ENET_BUFF_ALIGNMENT);
 
@@ -86,13 +80,99 @@ SDK_ALIGN(static xether_enet1g_tx_buff_t g_xether_enet1g_txbuff[ENET1G_TXBD_NUM]
 SDK_ALIGN(static xether_enet1g_rx_buff_t g_xether_enet1g_rxbuff[ENET1G_RXBUFF_NUM], ENET_BUFF_ALIGNMENT);
 
 
-static const phy_config_t XETHER_ENET1G_PHY_CONFIG =
+/* PHY operation. */
+static netc_mdio_handle_t			g_mdio_handle;
+static phy_rtl8201_resource_t		g_phy_rtl8201_resource;
+
+static const phy_operations_t		g_app_phy_rtl8201_ops =
 {
-	.phyAddr  = BOARD_ENET1_PHY_ADDRESS,
-	.ops      = &phyrtl8211f_ops,
-	.resource = &g_enet1g_phy_resource,
-	.autoNeg  = true,
+		.phyInit            = APP_PHY_RTL8201_Init,
+		.phyWrite           = PHY_RTL8201_Write,
+		.phyRead            = PHY_RTL8201_Read,
+		.getAutoNegoStatus  = PHY_RTL8201_GetAutoNegotiationStatus,
+		.getLinkStatus      = PHY_RTL8201_GetLinkStatus,
+		.getLinkSpeedDuplex = PHY_RTL8201_GetLinkSpeedDuplex,
+		.setLinkSpeedDuplex = PHY_RTL8201_SetLinkSpeedDuplex,
+		.enableLoopback     = PHY_RTL8201_EnableLoopback,
+		.enableLinkInterrupt= PHY_RTL8201_EnableLinkInterrupt,
+		.clearInterrupt     = PHY_RTL8201_ClearInterrupt
 };
+
+/* This does initialization and then reconfigures CRS/DV pin to RXDV signal. */
+static status_t APP_PHY_RTL8201_Init(phy_handle_t *handle, const phy_config_t *config)
+{
+    status_t result;
+    uint16_t data;
+
+    APP_MDIO_Init();
+
+    /* Reset PHY8201 for ETH4. Reset 10ms, wait 72ms. */
+    RGPIO_PinWrite(BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO, BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO_PIN, 0);
+    SDK_DelayAtLeastUs(10000, CLOCK_GetFreq(kCLOCK_CpuClk));
+    RGPIO_PinWrite(BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO, BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO_PIN, 1);
+    SDK_DelayAtLeastUs(72000, CLOCK_GetFreq(kCLOCK_CpuClk));
+
+    result = PHY_RTL8201_Init(handle, config);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+
+    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 7);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = PHY_Read(handle, 16, &data);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+
+    /* CRS/DV pin is RXDV signal. */
+    data |= (1U << 2);
+    result = PHY_Write(handle, 16, data);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 0);
+
+    return result;
+}
+
+static void APP_MDIO_Init(void)
+{
+    status_t result = kStatus_Success;
+
+    netc_mdio_config_t mdioConfig = {
+        .mdio =
+            {
+                .type = kNETC_EMdio,
+            },
+        .isPreambleDisable = false,
+        .isNegativeDriven  = false,
+        .srcClockHz        = EXAMPLE_NETC_FREQ,
+    };
+
+    mdioConfig.mdio.port = (netc_hw_eth_port_idx_t)kNETC_ENETC0EthPort;
+    result               = NETC_MDIOInit(&s_mdio_handle, &mdioConfig);
+    while (result != kStatus_Success)
+    {
+        // failed
+    }
+}
+
+status_t APP_EP0_MDIOWrite(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
+{
+    return NETC_MDIOWrite(&s_mdio_handle, phyAddr, regAddr, data);
+}
+
+status_t APP_EP0_MDIORead(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
+{
+    return NETC_MDIORead(&s_mdio_handle, phyAddr, regAddr, pData);
+}
+
 
 
 static void xether_enet1g_mdio_init(void)
@@ -384,6 +464,43 @@ static bool_t xether_enet1g_link_status_update(void)
 
 static inline void xether_init_board(void)
 {
+	/* RMII mode */
+	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[0] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(1);
+	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[4] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(1);
+
+	/* RGMII mode */
+	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[1] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(2);
+
+	/* Output reference clock for RMII */
+	BLK_CTRL_WAKEUPMIX->NETC_PORT_MISC_CFG |= BLK_CTRL_WAKEUPMIX_NETC_PORT_MISC_CFG_PORT0_RMII_REF_CLK_DIR_MASK |
+											  BLK_CTRL_WAKEUPMIX_NETC_PORT_MISC_CFG_PORT4_RMII_REF_CLK_DIR_MASK;
+
+	/* Unlock the IERB. It will warm reset whole NETC. */
+	NETC_PRIV->NETCRR &= ~NETC_PRIV_NETCRR_LOCK_MASK;
+	while ((NETC_PRIV->NETCRR & NETC_PRIV_NETCRR_LOCK_MASK) != 0U)
+	{
+	}
+
+	/* Set PHY address in IERB to use MAC port MDIO, otherwise the access will be blocked. */
+	NETC_IERB->L0BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_SWT_PORT0_PHY_ADDR);
+	NETC_IERB->L1BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_SWT_PORT1_PHY_ADDR);
+	NETC_IERB->L4BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_EP0_PHY_ADDR);
+
+	/* Set the access attribute, otherwise MSIX access will be blocked. */
+	NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR &= ~(7U << 27);
+	NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR |= (1U << 27);
+
+	/* Lock the IERB. */
+	NETC_PRIV->NETCRR |= NETC_PRIV_NETCRR_LOCK_MASK;
+	while ((NETC_PRIV->NETCSR & NETC_PRIV_NETCSR_STATE_MASK) != 0U)
+	{
+	}
+
+    g_phy_rtl8201_resource.write    = APP_EP0_MDIOWrite;
+    g_phy_rtl8201_resource.writeExt = NULL;
+    g_phy_rtl8201_resource.read     = APP_EP0_MDIORead;
+    g_phy_rtl8201_resource.readExt  = NULL;
+
 	g_xether_enet1g.tx_buff_descrip = &(g_xether_enet1g_txdesc[0]);
 	g_xether_enet1g.rx_buff_descrip = &(g_xether_enet1g_rxdesc[0]);
 
