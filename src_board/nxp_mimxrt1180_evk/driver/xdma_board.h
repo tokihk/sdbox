@@ -8,12 +8,12 @@
 #ifndef XDMA_MAP_H_
 #define XDMA_MAP_H_
 
-enum xboard_dma0_channel
+enum xboard_dma3_channel
 {
 	/* 0 - 31 */
-	XBOARD_DMA0_CH0_LPUART1_TX,
-	XBOARD_DMA0_CH0_LPUART1_RX,
-	XBOARD_DMA0_CH0_SAI1_TX,
+	XBOARD_DMA3_CH0_LPUART1_TX,
+	XBOARD_DMA3_CH0_LPUART1_RX,
+	XBOARD_DMA3_CH0_SAI1_TX,
 };
 
 

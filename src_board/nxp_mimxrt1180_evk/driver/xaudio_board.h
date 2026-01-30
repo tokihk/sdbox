@@ -36,9 +36,9 @@
 #define XAUDIO_SPEAKER_BUFFER_MSEC			(XCONFIG_AUDIO_BUFFER_MSEC)
 #define XAUDIO_SPEAKER_BUFFER_SIZE			(XAUDIO_SPEAKER_SAMPLING_RATE / 1000 * XAUDIO_SPEAKER_BYTE_WIDTH * XAUDIO_SPEAKER_CH_NUM * XAUDIO_SPEAKER_BUFFER_MSEC)
 
-#define XAUDIO_SPEAKER_DMAMUX				DMAMUX0
-#define XAUDIO_SPEAKER_DMA					DMA0
-#define XAUDIO_SPEAKER_DMA_CH				XBOARD_DMA0_CH0_SAI1_TX
+#define XAUDIO_SPEAKER_DMA					DMA3
+#define XAUDIO_SPEAKER_DMA_CH				XBOARD_DMA3_CH0_SAI1_TX
+#define XAUDIO_SPEAKER_DMA_IRQ				(DMA3_CH0_IRQn + XBOARD_DMA3_CH0_SAI1_TX)
 
 #define XAUDIO_SPEAKER_SAI					SAI1
 #define XAUDIO_SPEAKER_SAI_CH				0
@@ -377,7 +377,7 @@ static size_t xaudio_speaker_pcm_data_add(const uint8_t *data, size_t data_size)
 	size_t add_size = 0;
 	bool_t active_req = FALSE;
 
-	DisableIRQ(DMA0_DMA16_IRQn);
+	DisableIRQ(XAUDIO_SPEAKER_DMA_IRQ);
 	{
 		if (!g_xaudio_speaker.is_abort_req)
 		{
@@ -397,7 +397,7 @@ static size_t xaudio_speaker_pcm_data_add(const uint8_t *data, size_t data_size)
 			}
 		}
 	}
-	EnableIRQ(DMA0_DMA16_IRQn);
+	EnableIRQ(XAUDIO_SPEAKER_DMA_IRQ);
 
 	return (add_size);
 }
