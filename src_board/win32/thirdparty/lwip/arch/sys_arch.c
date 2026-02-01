@@ -81,8 +81,7 @@ static HCRYPTPROV hcrypt;
 static void
 sys_win_rand_init(void)
 {
-#if 0
-  if (!CryptAcquireContext(&hcrypt, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+  if (!CryptAcquireContext(&hcrypt, NULL, NULL, PROV_RSA_FULL, 0)) {
     DWORD err = GetLastError();
     LWIP_PLATFORM_DIAG(("CryptAcquireContext failed with error %d, trying to create NEWKEYSET", (int)err));
     if(!CryptAcquireContext(&hcrypt, NULL, NULL, PROV_RSA_FULL, CRYPT_NEWKEYSET)) {
@@ -93,15 +92,11 @@ sys_win_rand_init(void)
       LWIP_ASSERT(errbuf, 0);
     }
   }
-#else
-  srand((unsigned int)time(NULL));
-#endif
 }
 
 unsigned int
 lwip_port_rand(void)
 {
-#if 0
   u32_t ret;
   if (CryptGenRandom(hcrypt, sizeof(ret), (BYTE*)&ret)) {
     return ret;
@@ -113,9 +108,6 @@ lwip_port_rand(void)
   }
   LWIP_ASSERT("CryptGenRandom failed", 0);
   return 0;
-#else
-  return ((unsigned int)rand());
-#endif
 }
 
 static void
@@ -138,7 +130,6 @@ sys_get_ms_longlong(void)
 #endif /* NO_SYS */
   QueryPerformanceCounter(&now);
   ret = now.QuadPart-sys_start_time.QuadPart;
-
   return (u32_t)(((ret)*1000)/freq.QuadPart);
 }
 

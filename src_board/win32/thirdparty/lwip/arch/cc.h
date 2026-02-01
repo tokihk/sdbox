@@ -80,7 +80,11 @@ typedef int sys_prot_t;
 
 #define S16_F "hd"
 #define X16_F "hx"
+#ifdef _WIN64
+#define SZT_F "llu"
+#else
 #define SZT_F "lu"
+#endif
 #endif /* _MSC_VER */
 
 /* Compiler hints for packing structures */
@@ -108,8 +112,7 @@ void lwip_win32_platform_diag(const char *format, ...);
 #endif
 
 extern unsigned int lwip_port_rand(void);
-//#define LWIP_RAND() ((uint32_t)lwip_port_rand())
-#define LWIP_RAND() ((uint32_t)rand())
+#define LWIP_RAND() ((uint32_t)lwip_port_rand())
 
 #define PPP_INCLUDE_SETTINGS_HEADER
 

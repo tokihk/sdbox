@@ -237,7 +237,6 @@ bool_t xmutex_lock_isr(xmutex_t handle)
 		if (xSemaphoreTakeFromISR((SemaphoreHandle_t)handle, &yield) == pdPASS)
 		{
 			success = TRUE;
-			portYIELD_FROM_ISR(yield);
 		}
 	}
 
@@ -356,7 +355,6 @@ bool_t xsemaphore_lock_isr(xsemaphore_t handle)
 		if (xSemaphoreTakeFromISR((SemaphoreHandle_t)handle, &yield) == pdPASS)
 		{
 			success = TRUE;
-			portYIELD_FROM_ISR (yield);
 		}
 	}
 

@@ -107,7 +107,6 @@ uint32_t xevent_group_flags_set_isr(xevent_group_t handle, uint32_t flags)
 
 		if (xEventGroupSetBitsFromISR((EventGroupHandle_t)handle, (EventBits_t)flags, &yield)) {
 			rflags = flags;
-			portYIELD_FROM_ISR(yield);
 		}
 	}
 

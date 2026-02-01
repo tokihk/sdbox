@@ -35,7 +35,7 @@
  */
 
 /* include the port-dependent configuration */
-//#include "lwipcfg.h"
+#include "lwipcfg.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -189,7 +189,7 @@ struct pcapif_private {
   char             description[ADAPTER_DESC_LEN];
   int              shutdown_called;
 #if PCAPIF_RX_USE_THREAD
-  volatile int     rx_run;S
+  volatile int     rx_run;
   volatile int     rx_running;
 #endif /* PCAPIF_RX_USE_THREAD */
 #if PCAPIF_HANDLE_LINKSTATE
@@ -679,12 +679,17 @@ pcapif_shutdown(struct netif *netif)
 #endif /* PCAPIF_RX_USE_THREAD */
     if (pa->adapter) {
       pcap_breakloop(pa->adapter);
-      pcap_close(pa->adapter);
     }
 #if PCAPIF_RX_USE_THREAD
     /* wait for rxthread to end */
-    while(pa->rx_running);
+    while (pa->rx_running) {
+      Sleep(100);
+    }
 #endif /* PCAPIF_RX_USE_THREAD */
+    if (pa->adapter) {
+      pcap_close(pa->adapter);
+      pa->adapter = NULL;
+    }
 #if PCAPIF_HANDLE_LINKSTATE
     pcapifh_linkstate_close(pa->link_state);
 #endif /* PCAPIF_HANDLE_LINKSTATE */
