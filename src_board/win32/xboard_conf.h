@@ -8,8 +8,8 @@
 #ifndef XBOARD_CONF_H_
 #define XBOARD_CONF_H_
 
-#define XBOARD_OS_TYPE_BareMetal	(0)
-#define XBOARD_OS_TYPE_FreeRTOS		(1)
+  #define XBOARD_OS_TYPE_BareMetal	(0)
+  #define XBOARD_OS_TYPE_FreeRTOS	(1)
 
 #ifndef XBOARD_OS_TYPE
 #define XBOARD_OS_TYPE				(XBOARD_OS_TYPE_FreeRTOS)

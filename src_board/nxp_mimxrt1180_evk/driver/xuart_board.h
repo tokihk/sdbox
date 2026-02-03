@@ -9,7 +9,7 @@
 #define XUART_BOARD_H_
 
 #include "driver/xuart.h"
-#include "driver/xdma_map.h"
+#include "driver/xdma_board.h"
 
 #include "board.h"
 

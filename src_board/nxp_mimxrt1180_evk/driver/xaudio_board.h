@@ -8,7 +8,7 @@
 #ifndef XAUDIO_BOARD_H_
 #define XAUDIO_BOARD_H_
 
-#include "driver/xdma_map.h"
+#include "driver/xdma_board.h"
 #include "driver/xdriver.h"
 
 #include "core/xmalloc.h"
@@ -99,7 +99,7 @@ static wm8962_config_t g_wm8962_config =
 static codec_config_t boardCodecConfig =
 {
 		.codecDevType   = kCODEC_WM8962,
-		.codecDevConfig = XAUDIO_SPEAKER_BIT_WIDTH
+		.codecDevConfig = &g_wm8962_config
 };
 
 /*
@@ -204,7 +204,7 @@ static bool_t xaudio_speaker_sai_init(const xaudio_config_t *config)
 	EDMA_SetCallback(&g_xaudio_speaker.edma_tx_handle, xaudio_speaker_tx_complete_isr, NULL);
 	EDMA_ResetChannel(XAUDIO_SPEAKER_DMA, g_xaudio_speaker.edma_tx_handle.channel);
 
-	EDMA_SetChannelMux(XAUDIO_SPEAKER_DMA, XAUDIO_SPEAKER_DMA_CH, kDmaRequestMuxSai1Tx);
+	EDMA_SetChannelMux(XAUDIO_SPEAKER_DMA, XAUDIO_SPEAKER_DMA_CH, kDma3RequestMuxSai1Tx);
 
 	/* SAI Init */
 	SAI_Init(XAUDIO_SPEAKER_SAI);

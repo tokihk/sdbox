@@ -10,7 +10,7 @@
 
 xtimer_manager_t xtimer_manager_new(void)
 {
-
+	return (NULL);
 }
 
 void xtimer_manager_delete(xtimer_manager_t mgr)
@@ -25,7 +25,7 @@ void xtimer_poll(xtimer_manager_t mgr)
 
 xtimer_t xtimer_new(xtimer_manager_t mgr, xtimer_func_t func, bool_t reload, const char *name, void *param)
 {
-
+	return (NULL);
 }
 
 void xtimer_delete(xtimer_t handle)
@@ -35,7 +35,7 @@ void xtimer_delete(xtimer_t handle)
 
 bool_t xtimer_start(xtimer_t handle, uint32_t period_msec)
 {
-
+	return (FALSE);
 }
 
 void xtimer_stop(xtimer_t handle)
@@ -45,6 +45,6 @@ void xtimer_stop(xtimer_t handle)
 
 bool_t xtimer_is_running(xtimer_t handle)
 {
-
+	return (FALSE);
 }
 
