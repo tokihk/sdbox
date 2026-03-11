@@ -18,7 +18,7 @@
 #endif
 
 #include "fsl_edma.h"
-#include "fsl_gpio.h"
+#include "fsl_rgpio.h"
 
 #include "pin_mux.h"
 

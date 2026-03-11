@@ -21,19 +21,18 @@ static inline void xgpio_deinit_board(void)
 }
 
 /*
- * params[0] = (GPIO_Type *)port
+ * params[0] = (RGPIO_Type *)port
  * params[1] = (uint32_t)pin
  */
 
 bool_t xgpio_pin_open(const xgpio_pin_t *pin)
 {
-	gpio_pin_config_t pin_config;
+	rgpio_pin_config_t pin_config;
 
-	pin_config.direction = (pin->dir == XGPIO_DIR_OUTPUT) ? (kGPIO_DigitalOutput) : (kGPIO_DigitalInput);
+	pin_config.pinDirection = (pin->dir == XGPIO_DIR_OUTPUT) ? (kRGPIO_DigitalOutput) : (kRGPIO_DigitalInput);
 	pin_config.outputLogic = pin->logic_init;
-	pin_config.interruptMode = (gpio_interrupt_mode_t)pin->params[2];
 
-	GPIO_PinInit((GPIO_Type *)pin->params[0], (uint32_t)pin->params[2], &pin_config);
+	RGPIO_PinInit((RGPIO_Type *)pin->params[0], (uint32_t)pin->params[2], &pin_config);
 
 	return (TRUE);
 }
@@ -49,7 +48,7 @@ void xgpio_pin_close(const xgpio_pin_t *pin)
 
 bool_t xgpio_pin_logic_get(const xgpio_pin_t *pin)
 {
-	return ((((GPIO_Type *)(pin->params[0]))->DR >> (uint32_t)(pin->params[1])) & 0x1);
+	return ((((RGPIO_Type *)(pin->params[0]))->PDDR >> (uint32_t)(pin->params[1])) & 0x1);
 }
 
 /*
@@ -60,17 +59,17 @@ void xgpio_pin_logic_set(const xgpio_pin_t *pin, bool_t logic)
 {
 	if (logic)
 	{
-		((GPIO_Type *)(pin->params[0]))->DR_SET = 1u << (uint32_t)(pin->params[1]);
+		((RGPIO_Type *)(pin->params[0]))->PSOR = 1u << (uint32_t)(pin->params[1]);
 	}
 	else
 	{
-		((GPIO_Type *)(pin->params[0]))->DR_CLEAR = 1u << (uint32_t)(pin->params[1]);
+		((RGPIO_Type *)(pin->params[0]))->PCOR = 1u << (uint32_t)(pin->params[1]);
 	}
 }
 
 void xgpio_pin_logic_toggle(const xgpio_pin_t *pin)
 {
-	((GPIO_Type *)(pin->params[0]))->DR_TOGGLE = 1u << (uint32_t)(pin->params[1]);
+	((RGPIO_Type *)(pin->params[0]))->PTOR = 1u << (uint32_t)(pin->params[1]);
 }
 
 
