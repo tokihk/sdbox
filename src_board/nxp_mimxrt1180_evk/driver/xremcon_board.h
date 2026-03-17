@@ -47,25 +47,13 @@ void							xgpio_pin_logic_toggle(const xgpio_pin_t *pin);
 XGPIO_PIN_LIST_BEGIN(XREMCON_SIGNAL_GPIO_PIN)
 
 	/* USER LED 1 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 3,  kGPIO_NoIntmode),
+	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)RGPIO4, 27),
 
 	/* USER LED 2 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 25, kGPIO_NoIntmode),
+	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)RGPIO4, 26),
 
-	/* J25-15 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO8, 31, kGPIO_NoIntmode),
-
-	/* J25-13 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 0,  kGPIO_NoIntmode),
-
-	/* J25-11 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 1,  kGPIO_NoIntmode),
-
-	/* J25-9 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 2,  kGPIO_NoIntmode),
-
-	/* J25-7 */
-	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)GPIO9, 3,  kGPIO_NoIntmode),
+	/* GPIO4_00 */
+	XGPIO_PIN_LIST_ITEM(xgpio_pin, XGPIO_DIR_OUTPUT, 1, 0, (uint32_t)RGPIO4, 0),
 
 XGPIO_PIN_LIST_END()
 

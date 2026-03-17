@@ -15,7 +15,7 @@
 
 #include "fsl_lpuart.h"
 #include "fsl_lpuart_edma.h"
-#include "fsl_dmamux.h"
+#include "fsl_edma.h"
 
 
 #define XUART_LPUART1_TX_CH_NUM				(2)
@@ -23,10 +23,9 @@
 #define XUART_LPUART1_RX_BUFFER_SIZE		(128)
 #define XUART_LPUART1_TX_CH_BUFFER_SIZE		(XUART_LPUART1_TX_BUFFER_SIZE / XUART_LPUART1_TX_CH_NUM)
 
-#define XUART_LPUART1_DMAMUX				(DMAMUX0)
-#define XUART_LPUART1_DMA					(DMA0)
-#define XUART_LPUART1_DMA_CH_TX				(XBOARD_DMA0_CH0_LPUART1_TX)
-#define XUART_LPUART1_DMA_CH_RX				(XBOARD_DMA0_CH0_LPUART1_RX)
+#define XUART_LPUART1_DMA					(DMA3)
+#define XUART_LPUART1_DMA_CH_TX				(XBOARD_DMA3_CH_LPUART1_TX)
+#define XUART_LPUART1_DMA_CH_RX				(XBOARD_DMA3_CH_LPUART1_RX)
 
 
 static struct
@@ -125,16 +124,7 @@ bool_t xuart_lpuart1_open(const xuart_config_t *config)
 		lpuart_conf.enableTx     = true;
 		lpuart_conf.enableRx     = true;
 
-		LPUART_Init(LPUART1, &lpuart_conf, CLOCK_GetRootClockFreq(kCLOCK_Root_Lpuart1));
-	}
-
-	/* DMAMUX Initialize */
-	{
-		/* Set channel for LPUART */
-		DMAMUX_SetSource(XUART_LPUART1_DMAMUX, XUART_LPUART1_DMA_CH_TX, 8);
-		DMAMUX_SetSource(XUART_LPUART1_DMAMUX, XUART_LPUART1_DMA_CH_RX, 9);
-		DMAMUX_EnableChannel(DMAMUX0, XUART_LPUART1_DMA_CH_TX);
-		DMAMUX_EnableChannel(DMAMUX0, XUART_LPUART1_DMA_CH_RX);
+		LPUART_Init(LPUART1, &lpuart_conf, CLOCK_GetRootClockFreq(kCLOCK_Root_Lpuart0102));
 	}
 
 	/* DMA Initialize */
@@ -146,6 +136,8 @@ bool_t xuart_lpuart1_open(const xuart_config_t *config)
 		EDMA_Init(XUART_LPUART1_DMA, &edma_conf);
 		EDMA_CreateHandle(&g_xuart_lpuart1.edma_tx_handle, XUART_LPUART1_DMA, XUART_LPUART1_DMA_CH_TX);
 		EDMA_CreateHandle(&g_xuart_lpuart1.edma_rx_handle, XUART_LPUART1_DMA, XUART_LPUART1_DMA_CH_RX);
+	    EDMA_SetChannelMux(XUART_LPUART1_DMA, XUART_LPUART1_DMA_CH_TX, kDma3RequestMuxLPUART1Tx);
+	    EDMA_SetChannelMux(XUART_LPUART1_DMA, XUART_LPUART1_DMA_CH_RX, kDma3RequestMuxLPUART1Rx);
 	}
 
 	/* DMA TCD Setting */
@@ -218,7 +210,7 @@ size_t xuart_lpuart1_read(uint8_t *buffer, size_t buffer_size)
 	register uint8_t *buffer_ptr = buffer;
 	register uint8_t *buffer_ptr_end = buffer + buffer_size;
 	register uint8_t *dma_buffer_ptr = g_xuart_lpuart1.dma_rx_buffer_ptr;
-	register uint8_t *dma_buffer_ptr_end = (uint8_t *)(XUART_LPUART1_DMA->TCD[g_xuart_lpuart1.edma_rx_handle.channel].DADDR);
+	register uint8_t *dma_buffer_ptr_end = (uint8_t *)(XUART_LPUART1_DMA->CH[g_xuart_lpuart1.edma_rx_handle.channel].TCD_DADDR);
 
 	while (   (buffer_ptr < buffer_ptr_end)
 		   && (dma_buffer_ptr != dma_buffer_ptr_end)

@@ -32,7 +32,7 @@ bool_t xgpio_pin_open(const xgpio_pin_t *pin)
 	pin_config.pinDirection = (pin->dir == XGPIO_DIR_OUTPUT) ? (kRGPIO_DigitalOutput) : (kRGPIO_DigitalInput);
 	pin_config.outputLogic = pin->logic_init;
 
-	RGPIO_PinInit((RGPIO_Type *)pin->params[0], (uint32_t)pin->params[2], &pin_config);
+	RGPIO_PinInit((RGPIO_Type *)pin->params[0], (uint32_t)pin->params[1], &pin_config);
 
 	return (TRUE);
 }

@@ -23,7 +23,7 @@ typedef struct xgpio_pin xgpio_pin_t;
 	.logic_init=logic_init_,				\
 	.params={__VA_ARGS__},					\
 	.api_open=prefix##_open,				\
-	.api_close=prefix##_open,				\
+	.api_close=prefix##_close,				\
 	.api_logic_get=prefix##_logic_get,		\
 	.api_logic_set=prefix##_logic_set,		\
 }

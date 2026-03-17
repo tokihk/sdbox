@@ -345,12 +345,34 @@ void BOARD_InitEpPins(void) {
 }
 
 
+static void xboard_debug_pin_init(void)
+{
+	/* USER LED 1 */
+	IOMUXC_SetPinMux(
+			IOMUXC_GPIO_AD_27_GPIO4_IO27,           /* GPIO_AD_27 is configured as GPIO4_IO27 */
+			0U);                                    /* Software Input On Field: Input Path is determined by functionality */
+
+	/* USER LED 2 */
+	IOMUXC_SetPinMux(
+			IOMUXC_GPIO_AD_26_GPIO4_IO26,           /* GPIO_AD_26 is configured as GPIO4_IO26 */
+			0U);                                    /* Software Input On Field: Input Path is determined by functionality */
+
+	/* GPIO4_IO00 */
+	IOMUXC_SetPinMux(
+			IOMUXC_GPIO_AD_00_GPIO4_IO00,           /* GPIO_AD_00 is configured as GPIO4_IO00 */
+			0U);                                    /* Software Input On Field: Input Path is determined by functionality */
+}
+
 static void xboard_pin_init(void)
 {
     BOARD_InitPins();
 
+    xboard_debug_pin_init();
+
+    /* for Audio */
     BOARD_InitWM8962Pins();
 
+    /* for Ethernet */
     BOARD_InitPhyAccessPins();
     BOARD_InitEpPins();
 }
@@ -362,16 +384,13 @@ static void xboard_pll_init(void)
 
 static void xboard_dma_init(void)
 {
-	/* DMAMUX0 initialize */
-	DMAMUX_Init(DMAMUX0);
-
-	/* DMA0 initialize */
+	/* DMA3 initialize */
 	{
 		edma_config_t edma_conf;
 
 		EDMA_GetDefaultConfig(&edma_conf);
 
-		EDMA_Init(DMA0, &edma_conf);
+		EDMA_Init(DMA3, &edma_conf);
 	}
 }
 
@@ -381,10 +400,11 @@ static inline void xdriver_init_board(void)
 
 	BOARD_ConfigMPU();
 
-	xboard_pinmux_init();
 	xboard_pin_init();
 
 	xboard_pll_init();
+
+	xboard_dma_init();
 }
 
 static inline void xdriver_wait_us_board(uint32_t time_us)
