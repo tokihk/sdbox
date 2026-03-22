@@ -13,12 +13,13 @@
 #include "lwip/pbuf.h"
 
 #include "netc/fsl_netc.h"
+#include "netc/fsl_netc_endpoint.h"
 
 #include "fsl_phyrtl8201.h"
 #include "fsl_phyrtl8211f.h"
 
 
-#define ENET1G_FRAME_LEN_MAX			(ENET_FRAME_MAX_FRAMELEN + ENET_FRAME_VLAN_TAGLEN)
+#define NETCEP_FRAME_LEN_MAX			(ENET_FRAME_MAX_FRAMELEN + ENET_FRAME_VLAN_TAGLEN)
 
 #define ENET1G_TXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
 #define ENET1G_RXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
@@ -98,82 +99,170 @@ static const phy_operations_t		g_app_phy_rtl8201_ops =
 		.clearInterrupt     = PHY_RTL8201_ClearInterrupt
 };
 
-/* This does initialization and then reconfigures CRS/DV pin to RXDV signal. */
-static status_t APP_PHY_RTL8201_Init(phy_handle_t *handle, const phy_config_t *config)
+status_t APP_PHY_Init(void)
 {
-    status_t result;
-    uint16_t data;
+    status_t result            = kStatus_Success;
+    phy_config_t phy8211Config = {
+        .autoNeg   = false,
+        .speed     = kPHY_Speed1000M,
+        .duplex    = kPHY_FullDuplex,
+        .enableEEE = false,
+        .ops       = &phyrtl8211f_ops,
+    };
+    phy_config_t phy8201Config = {
+        .autoNeg   = false,
+        .speed     = kPHY_Speed100M,
+        .duplex    = kPHY_FullDuplex,
+        .enableEEE = false,
+        .ops       = &phyrtl8201_ops,
+    };
 
-    APP_MDIO_Init();
-
-    /* Reset PHY8201 for ETH4. Reset 10ms, wait 72ms. */
-    RGPIO_PinWrite(BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO, BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO_PIN, 0);
+    /* Reset all PHYs even some are not used in case unstable status has effect on other PHYs. */
+    /* Reset PHY8201 for ETH4(EP), ETH0(Switch port0). Power on 150ms, reset 10ms, wait 150ms. */
+    /* Reset PHY8211 for ETH1(Switch port1), ETH2(Switch port2), ETH3(Switch port3). Reset 10ms, wait 30ms. */
+    RGPIO_PinWrite(EXAMPLE_EP0_PORT_PHY_RESET_PIN, 0);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT0_PHY_RESET_PIN, 0);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT1_PHY_RESET_PIN, 0);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT2_PHY_RESET_PIN, 0);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT3_PHY_RESET_PIN, 0);
     SDK_DelayAtLeastUs(10000, CLOCK_GetFreq(kCLOCK_CpuClk));
-    RGPIO_PinWrite(BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO, BOARD_INITPHYACCESSPINS_ENET4_RST_B_GPIO_PIN, 1);
-    SDK_DelayAtLeastUs(72000, CLOCK_GetFreq(kCLOCK_CpuClk));
+    RGPIO_PinWrite(EXAMPLE_EP0_PORT_PHY_RESET_PIN, 1);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT0_PHY_RESET_PIN, 1);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT1_PHY_RESET_PIN, 1);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT2_PHY_RESET_PIN, 1);
+    RGPIO_PinWrite(EXAMPLE_SWT_PORT3_PHY_RESET_PIN, 1);
+    SDK_DelayAtLeastUs(150000, CLOCK_GetFreq(kCLOCK_CpuClk));
 
-    result = PHY_RTL8201_Init(handle, config);
+    /* Initialize PHY for EP. */
+    phy8201Config.resource = &s_phy_resource[EXAMPLE_EP0_PORT];
+    phy8201Config.phyAddr  = BOARD_EP0_PHY_ADDR;
+    result                 = APP_PHY_SetPort(EXAMPLE_EP0_PORT, &phy8201Config);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = APP_Phy8201SetUp(&s_phy_handle[EXAMPLE_EP0_PORT]);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+#if defined(EXAMPLE_PORT_USE_100M_HALF_DUPLEX_MODE)
+    uint16_t phyRegValue;
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 0x1F, 7);
+    (void)PHY_Read(&s_phy_handle[EXAMPLE_EP0_PORT], 20, &phyRegValue);
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 20, (phyRegValue | 0x900U));
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 0x1F, 0);
+#endif
+
+    /* Initialize PHY for switch port0. */
+    phy8201Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT0];
+    phy8201Config.phyAddr  = BOARD_SWT_PORT0_PHY_ADDR;
+    result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT0, &phy8201Config);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = APP_Phy8201SetUp(&s_phy_handle[EXAMPLE_SWT_PORT0]);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+#if defined(EXAMPLE_PORT_USE_100M_HALF_DUPLEX_MODE)
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 0x1F, 7);
+    (void)PHY_Read(&s_phy_handle[EXAMPLE_SWT_PORT0], 20, &phyRegValue);
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 20, (phyRegValue | 0x900U));
+    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 0x1F, 0);
+#endif
+
+    /* Initialize PHY for switch port1. */
+    phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT1];
+    phy8211Config.phyAddr  = BOARD_SWT_PORT1_PHY_ADDR;
+    result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT1, &phy8211Config);
     if (result != kStatus_Success)
     {
         return result;
     }
 
-    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 7);
-    if (result != kStatus_Success)
+    if (((1U << 2) & EXAMPLE_SWT_USED_PORT_BITMAP) != 0U)
     {
-        return result;
-    }
-    result = PHY_Read(handle, 16, &data);
-    if (result != kStatus_Success)
-    {
-        return result;
+        /* Initialize PHY for switch port2. */
+        phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT2];
+        phy8211Config.phyAddr  = BOARD_SWT_PORT2_PHY_ADDR;
+        result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT2, &phy8211Config);
+        if (result != kStatus_Success)
+        {
+            return result;
+        }
     }
 
-    /* CRS/DV pin is RXDV signal. */
-    data |= (1U << 2);
-    result = PHY_Write(handle, 16, data);
-    if (result != kStatus_Success)
+    if (((1U << 3) & EXAMPLE_SWT_USED_PORT_BITMAP) != 0U)
     {
-        return result;
+        /* Initialize PHY for switch port3. */
+        phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT3];
+        phy8211Config.phyAddr  = BOARD_SWT_PORT3_PHY_ADDR;
+        result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT3, &phy8211Config);
+        if (result != kStatus_Success)
+        {
+            return result;
+        }
     }
-    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 0);
 
     return result;
 }
 
-static void APP_MDIO_Init(void)
+status_t APP_PHY_GetLinkStatus(uint32_t port, bool *link)
+{
+    return PHY_GetLinkStatus(&s_phy_handle[port], link);
+}
+
+
+status_t APP_MDIO_Init(void)
 {
     status_t result = kStatus_Success;
 
     netc_mdio_config_t mdioConfig = {
-        .mdio =
-            {
-                .type = kNETC_EMdio,
-            },
         .isPreambleDisable = false,
         .isNegativeDriven  = false,
         .srcClockHz        = EXAMPLE_NETC_FREQ,
     };
 
-    mdioConfig.mdio.port = (netc_hw_eth_port_idx_t)kNETC_ENETC0EthPort;
-    result               = NETC_MDIOInit(&s_mdio_handle, &mdioConfig);
-    while (result != kStatus_Success)
+#ifdef EXAMPLE_PHY_USE_PORT_MDIO
+    /* Usually should call EP_Init/SWT_Init then init port MDIO, here just an quick enablement example. */
+    NETC_F2_PCI_HDR_TYPE0->PCI_CFH_CMD |=
+        (ENETC_PCI_TYPE0_PCI_CFH_CMD_MEM_ACCESS_MASK | ENETC_PCI_TYPE0_PCI_CFH_CMD_BUS_MASTER_EN_MASK);
+    NETC_F3_PCI_HDR_TYPE0->PCI_CFH_CMD |=
+        (ENETC_PCI_TYPE0_PCI_CFH_CMD_MEM_ACCESS_MASK | ENETC_PCI_TYPE0_PCI_CFH_CMD_BUS_MASTER_EN_MASK);
+
+    for (int i = 0U; i < 5U; i++)
     {
-        // failed
+        mdioConfig.mdio.port = (netc_hw_eth_port_idx_t)((uint32_t)kNETC_ENETC0EthPort + i);
+        result               = NETC_MDIOInit(&s_mdio_handle[i], &mdioConfig);
+        if (result != kStatus_Success)
+        {
+            return result;
+        }
     }
+#else
+    mdioConfig.mdio.type = kNETC_EMdio;
+    result               = NETC_MDIOInit(&s_emdio_handle, &mdioConfig);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+#endif
+
+    return result;
 }
 
-status_t APP_EP0_MDIOWrite(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
+static status_t APP_EMDIOWrite(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
 {
-    return NETC_MDIOWrite(&s_mdio_handle, phyAddr, regAddr, data);
+    return NETC_MDIOWrite(&s_emdio_handle, phyAddr, regAddr, data);
 }
 
-status_t APP_EP0_MDIORead(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
+static status_t APP_EMDIORead(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
 {
-    return NETC_MDIORead(&s_mdio_handle, phyAddr, regAddr, pData);
+    return NETC_MDIORead(&s_emdio_handle, phyAddr, regAddr, pData);
 }
-
-
 
 static void xether_enet1g_mdio_init(void)
 {
@@ -182,17 +271,17 @@ static void xether_enet1g_mdio_init(void)
 	ENET_SetSMI(ENET_1G, CLOCK_GetRootClockFreq(kCLOCK_Root_Bus), false);
 }
 
-static status_t xether_enet1g_mdio_write(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
+static status_t xether_netc_ep_mdio_write(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
 {
     return ENET_MDIOWrite(ENET_1G, phyAddr, regAddr, data);
 }
 
-static status_t xether_enet1g_mdio_read(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
+static status_t xether_netc_ep_mdio_read(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
 {
     return ENET_MDIORead(ENET_1G, phyAddr, regAddr, pData);
 }
 
-static bool_t xether_enet1g_phy_init(void)
+static bool_t xether_netc_ep_phy_init(void)
 {
 	status_t status;
 
@@ -280,7 +369,7 @@ static struct pbuf *xether_enet1g_rx_frame_to_pbufs(enet_rx_frame_struct_t *rxFr
 static bool_t xether_enet1g_init(const xether_config_t *config)
 {
 	bool_t					success = FALSE;
-	enet_config_t			enet_config;
+	ep_config_t				ep_config;
 	enet_buffer_config_t	enet_buff_config;
 	uint16_t				i;
 
@@ -300,6 +389,18 @@ static bool_t xether_enet1g_init(const xether_config_t *config)
 	enet_buff_config.txFrameInfo = NULL; /* Transmit frame information start address. Set only if using zero-copy transmit. */
 	enet_buff_config.txMaintainEnable = true; /* Transmit buffer cache maintain. */
 	enet_buff_config.rxMaintainEnable = true; /* Receive buffer cache maintain. */
+
+	/* Endpoint Config */
+	EP_GetDefaultConfig(&ep_config);
+	ep_config.si                    = g_siIndex[index];
+	ep_config.siConfig.txRingUse    = 1;
+	ep_config.siConfig.rxRingUse    = 1;
+	ep_config.reclaimCallback       = APP_ReclaimCallback;
+	ep_config.msixEntry             = &msixEntry[0];
+	ep_config.entryNum              = 2;
+	ep_config.port.ethMac.miiMode   = phyMode;
+	ep_config.port.ethMac.miiSpeed  = phySpeed;
+	ep_config.port.ethMac.miiDuplex = phyDuplex;
 
 	ENET_GetDefaultConfig(&enet_config);
 	enet_config.miiMode = kENET_RgmiiMode;
@@ -326,7 +427,7 @@ static bool_t xether_enet1g_init(const xether_config_t *config)
 		g_xether_enet1g.rxpbuf_index = 0;
 
 		/* Initialize the ENET module. */
-		result = ENET_Init(
+		result = EP_Init(
 			ENET_1G,
 			&g_xether_enet1g.enet_handle,
 			&enet_config,
@@ -347,7 +448,7 @@ static bool_t xether_enet1g_init(const xether_config_t *config)
 }
 
 
-static bool_t xether_enet1g_open(const xether_config_t *config)
+static bool_t xether_netc_ep_open(const xether_config_t *config)
 {
 	bool_t open_ok = FALSE;
 
@@ -356,11 +457,11 @@ static bool_t xether_enet1g_open(const xether_config_t *config)
 	return (open_ok);
 }
 
-static void xether_enet1g_close(void)
+static void xether_netc_ep_close(void)
 {
 }
 
-static struct pbuf *xether_enet1g_recv_packet_get(void)
+static struct pbuf *xether_netc_ep_recv_packet_get(void)
 {
 	enet_buffer_struct_t	buffers[ENET1G_MAX_BUFFERS_PER_FRAME];
 	enet_rx_frame_struct_t	rxFrame = {.rxBuffArray = &buffers[0] };
@@ -398,7 +499,7 @@ static struct pbuf *xether_enet1g_recv_packet_get(void)
 	return (p);
 }
 
-static bool_t xether_enet1g_send_packet_set(struct pbuf *p)
+static bool_t xether_netc_ep_send_packet_set(struct pbuf *p)
 {
 	err_t		result;
 	uint8_t *	pucBuffer = g_xether_enet1g.send_frame_buff;
@@ -432,7 +533,7 @@ static bool_t xether_enet1g_send_packet_set(struct pbuf *p)
 	return (TRUE);
 }
 
-static bool_t xether_enet1g_link_status_update(void)
+static bool_t xether_netc_ep_link_status_update(void)
 {
 	bool	link_status_raw;
 
@@ -513,7 +614,7 @@ static inline void xether_deinit_board(void)
 }
 
 XETHERNET_DEVICE_LIST_BEGIN()
-  XETHERNET_DEVICE_LIST_ITEM(xether_enet1g),
+  XETHERNET_DEVICE_LIST_ITEM(xether_netc_ep),
 XETHERNET_DEVICE_LIST_END()
 
 #endif /* XETHER_BOARD_H_ */
