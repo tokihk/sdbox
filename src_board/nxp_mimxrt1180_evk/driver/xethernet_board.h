@@ -19,7 +19,7 @@
 #include "fsl_phyrtl8211f.h"
 
 
-#define NETCEP_FRAME_LEN_MAX			(ENET_FRAME_MAX_FRAMELEN + ENET_FRAME_VLAN_TAGLEN)
+#define NETC_EP_FRAME_LEN_MAX			(ENET_FRAME_MAX_FRAMELEN + ENET_FRAME_VLAN_TAGLEN)
 
 #define ENET1G_TXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
 #define ENET1G_RXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
@@ -30,6 +30,17 @@
 #define ENET1G_RXBUFF_NUM				(ENET1G_RXBD_NUM * 2)
 
 #define ENET1G_MAX_BUFFERS_PER_FRAME	((ENET1G_FRAME_LEN_MAX / ENET1G_RXBUFF_SIZE) + ((ENET1G_FRAME_LEN_MAX % ENET1G_RXBUFF_SIZE == 0) ? 0 : 1))
+
+typedef enum xether_netc_ep_id
+{
+	XETHER_NETC_EP0,
+	XETHER_NETC_EP1,
+	XETHER_NETC_EP2,
+	XETHER_NETC_EP3,
+	XETHER_NETC_EP4,
+
+	XETHER_NEC_EP_NUM
+} xether_netc_ep_id_t;
 
 
 typedef uint8_t xether_enet1g_tx_buff_t[SDK_SIZEALIGN(ENET1G_TXBUFF_SIZE, ENET_BUFF_ALIGNMENT)];
@@ -49,6 +60,18 @@ typedef struct xether_device_status
 	uint32_t					tx_packet_count;
 } xether_device_status_t;
 
+typedef struct xether_ep_handle
+{
+	phy_handle_t				phy_handle;
+	phy_rtl8211f_resource_t		phy_resource;
+
+	netc_hw_si_idx_t
+
+	phy_speed_t					last_speed;
+	phy_duplex_t				last_duplex;
+	bool_t						last_link_up;
+} xether_ep_handle_t;
+
 static struct
 {
 	ENET_Type *					enet_base;
@@ -67,7 +90,7 @@ static struct
 
 	uint8_t						send_frame_buff[ENET1G_FRAME_LEN_MAX];
 
-	phy_handle_t				phy_handle;
+	phy_handle_t				phy_handle[XETHER_NEC_EP_NUM];
 	phy_speed_t					last_speed;
 	phy_duplex_t				last_duplex;
 	bool_t						last_link_up;
@@ -99,6 +122,80 @@ static const phy_operations_t		g_app_phy_rtl8201_ops =
 		.clearInterrupt     = PHY_RTL8201_ClearInterrupt
 };
 
+
+static inline void xether_netc_ep0_phy_reset_pin_set(bool_t reset)
+{
+	RGPIO_PinWrite(RGPIO4, 13, (reset) ? (0) : (1));
+}
+
+static inline void xether_netc_ep1_phy_reset_pin_set(bool_t reset)
+{
+	RGPIO_PinWrite(RGPIO4, 25, (reset) ? (0) : (1));
+}
+
+static inline void xether_netc_ep2_phy_reset_pin_set(bool_t reset)
+{
+	RGPIO_PinWrite(RGPIO6, 13, (reset) ? (0) : (1));
+}
+
+static inline void xether_netc_ep3_phy_reset_pin_set(bool_t reset)
+{
+	RGPIO_PinWrite(RGPIO4, 28, (reset) ? (0) : (1));
+}
+
+static inline void xether_netc_ep4_phy_reset_pin_set(bool_t reset)
+{
+	RGPIO_PinWrite(RGPIO6, 15, (reset) ? (0) : (1));
+}
+
+static status_t APP_Phy8201SetUp(phy_handle_t *handle)
+{
+    status_t result;
+    uint16_t data;
+
+    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 7);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = PHY_Read(handle, 16, &data);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+
+    /* CRS/DV pin is RXDV signal. */
+    data |= (1U << 2);
+    result = PHY_Write(handle, 16, data);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 0);
+
+    return result;
+}
+
+static status_t APP_PHY_SetPort(uint32_t port, phy_config_t *phyConfig)
+{
+    status_t result = kStatus_Success;
+
+#ifdef EXAMPLE_PHY_USE_PORT_MDIO
+    s_phy_resource[port].write = APP_PMDIOWrite;
+    s_phy_resource[port].read  = APP_PMDIORead;
+#else
+    s_phy_resource[port].write = APP_EMDIOWrite;
+    s_phy_resource[port].read  = APP_EMDIORead;
+#endif
+    result = PHY_Init(&s_phy_handle[port], phyConfig);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+
+    return PHY_EnableLoopback(&s_phy_handle[port], kPHY_LocalLoop, phyConfig->speed, true);
+}
+
 status_t APP_PHY_Init(void)
 {
     status_t result            = kStatus_Success;
@@ -120,17 +217,20 @@ status_t APP_PHY_Init(void)
     /* Reset all PHYs even some are not used in case unstable status has effect on other PHYs. */
     /* Reset PHY8201 for ETH4(EP), ETH0(Switch port0). Power on 150ms, reset 10ms, wait 150ms. */
     /* Reset PHY8211 for ETH1(Switch port1), ETH2(Switch port2), ETH3(Switch port3). Reset 10ms, wait 30ms. */
-    RGPIO_PinWrite(EXAMPLE_EP0_PORT_PHY_RESET_PIN, 0);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT0_PHY_RESET_PIN, 0);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT1_PHY_RESET_PIN, 0);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT2_PHY_RESET_PIN, 0);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT3_PHY_RESET_PIN, 0);
+    xether_netc_ep0_phy_reset_pin_set(TRUE);
+    xether_netc_ep1_phy_reset_pin_set(TRUE);
+    xether_netc_ep2_phy_reset_pin_set(TRUE);
+    xether_netc_ep3_phy_reset_pin_set(TRUE);
+    xether_netc_ep4_phy_reset_pin_set(TRUE);
+
     SDK_DelayAtLeastUs(10000, CLOCK_GetFreq(kCLOCK_CpuClk));
-    RGPIO_PinWrite(EXAMPLE_EP0_PORT_PHY_RESET_PIN, 1);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT0_PHY_RESET_PIN, 1);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT1_PHY_RESET_PIN, 1);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT2_PHY_RESET_PIN, 1);
-    RGPIO_PinWrite(EXAMPLE_SWT_PORT3_PHY_RESET_PIN, 1);
+
+    xether_netc_ep0_phy_reset_pin_set(FALSE);
+    xether_netc_ep1_phy_reset_pin_set(FALSE);
+    xether_netc_ep2_phy_reset_pin_set(FALSE);
+    xether_netc_ep3_phy_reset_pin_set(FALSE);
+    xether_netc_ep4_phy_reset_pin_set(FALSE);
+
     SDK_DelayAtLeastUs(150000, CLOCK_GetFreq(kCLOCK_CpuClk));
 
     /* Initialize PHY for EP. */
@@ -366,7 +466,7 @@ static struct pbuf *xether_enet1g_rx_frame_to_pbufs(enet_rx_frame_struct_t *rxFr
 	return (p);
 }
 
-static bool_t xether_enet1g_init(const xether_config_t *config)
+static bool_t xether_netc_ep_init(const xether_config_t *config)
 {
 	bool_t					success = FALSE;
 	ep_config_t				ep_config;
