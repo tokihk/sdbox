@@ -31,6 +31,18 @@
 
 #define ENET1G_MAX_BUFFERS_PER_FRAME	((ENET1G_FRAME_LEN_MAX / ENET1G_RXBUFF_SIZE) + ((ENET1G_FRAME_LEN_MAX % ENET1G_RXBUFF_SIZE == 0) ? 0 : 1))
 
+#define NETC_EP_BUFF_SIZE_ALIGN			64U
+#define NETC_EP_BD_ALIGN				128U
+
+#define NETC_EP_RING_NUM				3U
+#define NETC_EP_RXBD_NUM				8U
+#define NETC_EP_RXBUFF_SIZE				1522U
+#define NETC_EP_RXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_RXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
+
+#define NETC_EP_TXFRAME_NUM				20U
+#define NETC_EP_TXBD_NUM				8U
+
+
 typedef enum xether_netc_ep_id
 {
 	XETHER_NETC_EP0,
@@ -95,6 +107,26 @@ static struct
 	phy_duplex_t				last_duplex;
 	bool_t						last_link_up;
 } g_xether_enet1g;
+
+
+
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t g_rxBuffDescrip[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM],
+                              EXAMPLE_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static rx_buffer_t g_rxDataBuff[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM],
+                              EXAMPLE_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t g_txFrame[EXAMPLE_EP_TEST_FRAME_SIZE], EXAMPLE_EP_BUFF_SIZE_ALIGN);
+
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t g_mgmtTxBuffDescrip[EXAMPLE_EP_TXBD_NUM], EXAMPLE_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t g_cmdBuffDescrip[EXAMPLE_EP_TXBD_NUM], EXAMPLE_EP_BD_ALIGN);
+
+AT_NONCACHEABLE_SECTION(static uint8_t g_rxFrame[EXAMPLE_EP_RXBUFF_SIZE_ALIGN]);
+static uint64_t rxBuffAddrArray[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM];
+static netc_tx_frame_info_t g_mgmtTxDirty[EXAMPLE_EP_TXBD_NUM];
+static netc_tx_frame_info_t mgmtTxFrameInfo;
+
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t g_txBuffDescrip[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_TXBD_NUM],
+                              EXAMPLE_EP_BD_ALIGN);
+static netc_tx_frame_info_t g_txDirty[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_TXBD_NUM];
 
 
 AT_NONCACHEABLE_SECTION_ALIGN(static enet_tx_bd_struct_t g_xether_enet1g_txdesc[ENET1G_TXBD_NUM], ENET_BUFF_ALIGNMENT);
@@ -466,7 +498,7 @@ static struct pbuf *xether_enet1g_rx_frame_to_pbufs(enet_rx_frame_struct_t *rxFr
 	return (p);
 }
 
-static bool_t xether_netc_ep_init(const xether_config_t *config)
+static bool_t xether_netc_ep_init(uint8_t index, const xether_config_t *config)
 {
 	bool_t					success = FALSE;
 	ep_config_t				ep_config;
@@ -548,20 +580,20 @@ static bool_t xether_netc_ep_init(const xether_config_t *config)
 }
 
 
-static bool_t xether_netc_ep_open(const xether_config_t *config)
+static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
 	bool_t open_ok = FALSE;
 
-	open_ok = xether_enet1g_init(config);
+	open_ok = xether_netc_ep_init(0, config);
 
 	return (open_ok);
 }
 
-static void xether_netc_ep_close(void)
+static void xether_netc_ep0_close(void)
 {
 }
 
-static struct pbuf *xether_netc_ep_recv_packet_get(void)
+static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 {
 	enet_buffer_struct_t	buffers[ENET1G_MAX_BUFFERS_PER_FRAME];
 	enet_rx_frame_struct_t	rxFrame = {.rxBuffArray = &buffers[0] };
@@ -599,7 +631,7 @@ static struct pbuf *xether_netc_ep_recv_packet_get(void)
 	return (p);
 }
 
-static bool_t xether_netc_ep_send_packet_set(struct pbuf *p)
+static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 {
 	err_t		result;
 	uint8_t *	pucBuffer = g_xether_enet1g.send_frame_buff;
@@ -633,7 +665,7 @@ static bool_t xether_netc_ep_send_packet_set(struct pbuf *p)
 	return (TRUE);
 }
 
-static bool_t xether_netc_ep_link_status_update(void)
+static bool_t xether_netc_ep0_link_status_update(void)
 {
 	bool	link_status_raw;
 
@@ -714,7 +746,7 @@ static inline void xether_deinit_board(void)
 }
 
 XETHERNET_DEVICE_LIST_BEGIN()
-  XETHERNET_DEVICE_LIST_ITEM(xether_netc_ep),
+  XETHERNET_DEVICE_LIST_ITEM(xether_netc_ep0),
 XETHERNET_DEVICE_LIST_END()
 
 #endif /* XETHER_BOARD_H_ */
