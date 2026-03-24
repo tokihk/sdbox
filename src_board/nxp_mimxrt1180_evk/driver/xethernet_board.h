@@ -34,13 +34,16 @@
 #define NETC_EP_BUFF_SIZE_ALIGN			64U
 #define NETC_EP_BD_ALIGN				128U
 
-#define NETC_EP_RING_NUM				3U
+#define NETC_EP_RXRING_NUM				3U
 #define NETC_EP_RXBD_NUM				8U
 #define NETC_EP_RXBUFF_SIZE				1522U
 #define NETC_EP_RXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_RXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
 
+#define NETC_EP_TXRING_NUM				3U
 #define NETC_EP_TXFRAME_NUM				20U
 #define NETC_EP_TXBD_NUM				8U
+#define NETC_EP_TXBUFF_SIZE				1522U
+#define NETC_EP_TXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_TXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
 
 
 typedef enum xether_netc_ep_id
@@ -53,10 +56,6 @@ typedef enum xether_netc_ep_id
 
 	XETHER_NEC_EP_NUM
 } xether_netc_ep_id_t;
-
-
-typedef uint8_t xether_enet1g_tx_buff_t[SDK_SIZEALIGN(ENET1G_TXBUFF_SIZE, ENET_BUFF_ALIGNMENT)];
-typedef uint8_t xether_enet1g_rx_buff_t[SDK_SIZEALIGN(ENET1G_RXBUFF_SIZE, ENET_BUFF_ALIGNMENT)];
 
 
 typedef struct xether_rx_pbuf_wrapper
@@ -72,16 +71,21 @@ typedef struct xether_device_status
 	uint32_t					tx_packet_count;
 } xether_device_status_t;
 
+typedef struct xether_ep_status
+{
+	phy_speed_t					last_speed;
+	phy_duplex_t				last_duplex;
+	bool_t						last_link_up;
+} xether_ep_status_t;
+
 typedef struct xether_ep_handle
 {
 	phy_handle_t				phy_handle;
 	phy_rtl8211f_resource_t		phy_resource;
 
-	netc_hw_si_idx_t
+	netc_hw_si_idx_t			hw_si_id;
 
-	phy_speed_t					last_speed;
-	phy_duplex_t				last_duplex;
-	bool_t						last_link_up;
+	xether_ep_status_t			status;
 } xether_ep_handle_t;
 
 static struct
@@ -109,31 +113,25 @@ static struct
 } g_xether_enet1g;
 
 
+typedef uint8_t										netc_ep_rx_buffer_t[NETC_EP_RXBUFF_SIZE_ALIGN];
+typedef uint8_t										netc_ep_tx_buffer_t[NETC_EP_TXBUFF_SIZE_ALIGN];
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t g_rxBuffDescrip[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM],
-                              EXAMPLE_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static rx_buffer_t g_rxDataBuff[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM],
-                              EXAMPLE_EP_BUFF_SIZE_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t g_txFrame[EXAMPLE_EP_TEST_FRAME_SIZE], EXAMPLE_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_rxBuffDescrip[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_rxDataBuff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_rxFrame[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t g_mgmtTxBuffDescrip[EXAMPLE_EP_TXBD_NUM], EXAMPLE_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t g_cmdBuffDescrip[EXAMPLE_EP_TXBD_NUM], EXAMPLE_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_tx_buffer_t	g_txFrame[NETC_EP_TXBUFF_SIZE], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION(static uint8_t g_rxFrame[EXAMPLE_EP_RXBUFF_SIZE_ALIGN]);
-static uint64_t rxBuffAddrArray[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_RXBD_NUM];
-static netc_tx_frame_info_t g_mgmtTxDirty[EXAMPLE_EP_TXBD_NUM];
-static netc_tx_frame_info_t mgmtTxFrameInfo;
-
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t g_txBuffDescrip[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_TXBD_NUM],
-                              EXAMPLE_EP_BD_ALIGN);
-static netc_tx_frame_info_t g_txDirty[EXAMPLE_EP_RING_NUM][EXAMPLE_EP_TXBD_NUM];
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_mgmtTxBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t			g_cmdBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
 
 
-AT_NONCACHEABLE_SECTION_ALIGN(static enet_tx_bd_struct_t g_xether_enet1g_txdesc[ENET1G_TXBD_NUM], ENET_BUFF_ALIGNMENT);
-AT_NONCACHEABLE_SECTION_ALIGN(static enet_rx_bd_struct_t g_xether_enet1g_rxdesc[ENET1G_RXBD_NUM], ENET_BUFF_ALIGNMENT);
+static uint64_t												g_rxBuffAddrArray[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
+static netc_tx_frame_info_t									g_mgmtTxDirty[NETC_EP_TXBD_NUM];
+static netc_tx_frame_info_t									g_mgmtTxFrameInfo;
 
-SDK_ALIGN(static xether_enet1g_tx_buff_t g_xether_enet1g_txbuff[ENET1G_TXBD_NUM], ENET_BUFF_ALIGNMENT);
-SDK_ALIGN(static xether_enet1g_rx_buff_t g_xether_enet1g_rxbuff[ENET1G_RXBUFF_NUM], ENET_BUFF_ALIGNMENT);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t	g_txBuffDescrip[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+static netc_tx_frame_info_t							g_txDirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
 
 
 /* PHY operation. */
@@ -579,6 +577,9 @@ static bool_t xether_netc_ep_init(uint8_t index, const xether_config_t *config)
 	return (success);
 }
 
+static void xether_netc_ep_deinit(uint8_t index)
+{
+}
 
 static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
@@ -591,6 +592,7 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 
 static void xether_netc_ep0_close(void)
 {
+	xether_netc_ep_deinit(0);
 }
 
 static struct pbuf *xether_netc_ep0_recv_packet_get(void)
@@ -697,48 +699,44 @@ static bool_t xether_netc_ep0_link_status_update(void)
 
 static inline void xether_init_board(void)
 {
-	/* RMII mode */
-	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[0] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(1);
-	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[4] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(1);
+    /* EP and Switch port 0 use RMII interface. */
+    NETC_SocSetMiiMode(kNETC_SocLinkEp0, kNETC_RmiiMode);
+    NETC_SocSetMiiMode(kNETC_SocLinkSwitchPort0, kNETC_RmiiMode);
 
-	/* RGMII mode */
-	BLK_CTRL_WAKEUPMIX->NETC_LINK_CFG[1] = BLK_CTRL_WAKEUPMIX_NETC_LINK_CFG_MII_PROT(2);
+    /* Switch port 1~3 use RGMII interface. */
+    NETC_SocSetMiiMode(kNETC_SocLinkSwitchPort1, kNETC_RgmiiMode);
+    NETC_SocSetMiiMode(kNETC_SocLinkSwitchPort2, kNETC_RgmiiMode);
+    NETC_SocSetMiiMode(kNETC_SocLinkSwitchPort3, kNETC_RgmiiMode);
 
-	/* Output reference clock for RMII */
-	BLK_CTRL_WAKEUPMIX->NETC_PORT_MISC_CFG |= BLK_CTRL_WAKEUPMIX_NETC_PORT_MISC_CFG_PORT0_RMII_REF_CLK_DIR_MASK |
-											  BLK_CTRL_WAKEUPMIX_NETC_PORT_MISC_CFG_PORT4_RMII_REF_CLK_DIR_MASK;
+    /* Output reference clock for RMII interface. */
+    NETC_SocSetRmiiRefClk(kNETC_SocLinkEp0, true);
+    NETC_SocSetRmiiRefClk(kNETC_SocLinkSwitchPort0, true);
 
-	/* Unlock the IERB. It will warm reset whole NETC. */
-	NETC_PRIV->NETCRR &= ~NETC_PRIV_NETCRR_LOCK_MASK;
-	while ((NETC_PRIV->NETCRR & NETC_PRIV_NETCRR_LOCK_MASK) != 0U)
-	{
-	}
+    /* Unlock the IERB. It will warm reset whole NETC. */
+    if (NETC_IERBUnlock() == kStatus_Success)
+    {
+        while (!NETC_IERBIsUnlockOver())
+        {
+        }
+    }
 
-	/* Set PHY address in IERB to use MAC port MDIO, otherwise the access will be blocked. */
-	NETC_IERB->L0BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_SWT_PORT0_PHY_ADDR);
-	NETC_IERB->L1BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_SWT_PORT1_PHY_ADDR);
-	NETC_IERB->L4BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(EXAMPLE_EP0_PHY_ADDR);
+    /* Set the access attribute, otherwise MSIX access will be blocked. */
+    NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR &= ~(7U << 27);
+    NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR |= (1U << 27);
 
-	/* Set the access attribute, otherwise MSIX access will be blocked. */
-	NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR &= ~(7U << 27);
-	NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR |= (1U << 27);
+    /* Set PHY address in IERB to use MAC port MDIO, otherwise the access will be blocked. */
+    NETC_SocSetLinkAddr(kNETC_SocLinkEp0, BOARD_EP0_PHY_ADDR);
+    NETC_SocSetLinkAddr(kNETC_SocLinkSwitchPort0, BOARD_SWT_PORT0_PHY_ADDR);
+    NETC_SocSetLinkAddr(kNETC_SocLinkSwitchPort1, BOARD_SWT_PORT1_PHY_ADDR);
+    NETC_SocSetLinkAddr(kNETC_SocLinkSwitchPort2, BOARD_SWT_PORT2_PHY_ADDR);
+    NETC_SocSetLinkAddr(kNETC_SocLinkSwitchPort3, BOARD_SWT_PORT3_PHY_ADDR);
 
-	/* Lock the IERB. */
-	NETC_PRIV->NETCRR |= NETC_PRIV_NETCRR_LOCK_MASK;
-	while ((NETC_PRIV->NETCSR & NETC_PRIV_NETCSR_STATE_MASK) != 0U)
-	{
-	}
+    /* Lock the IERB. */
+    assert(NETC_IERBLock() == kStatus_Success);
+    while (!NETC_IERBIsLockOver())
+    {
+    }
 
-    g_phy_rtl8201_resource.write    = APP_EP0_MDIOWrite;
-    g_phy_rtl8201_resource.writeExt = NULL;
-    g_phy_rtl8201_resource.read     = APP_EP0_MDIORead;
-    g_phy_rtl8201_resource.readExt  = NULL;
-
-	g_xether_enet1g.tx_buff_descrip = &(g_xether_enet1g_txdesc[0]);
-	g_xether_enet1g.rx_buff_descrip = &(g_xether_enet1g_rxdesc[0]);
-
-	g_xether_enet1g.tx_data_buff    = &(g_xether_enet1g_txbuff[0]);
-	g_xether_enet1g.rx_data_buff    = &(g_xether_enet1g_rxbuff[0]);
 }
 
 static inline void xether_deinit_board(void)
