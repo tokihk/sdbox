@@ -46,15 +46,12 @@
 #define NETC_EP_TXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_TXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
 
 
-typedef enum xether_netc_ep_id
+typedef enum xether_netc_id
 {
-	XETHER_NETC_EP0,
-	XETHER_NETC_EP1,
-	XETHER_NETC_EP2,
-	XETHER_NETC_EP3,
-	XETHER_NETC_EP4,
+	XETHER_NETC0,					/* ENETC0 */
+	XETHER_NETC1,					/* ENETC1 */
 
-	XETHER_NEC_EP_NUM
+	XETHER_NETC_NUM
 } xether_netc_ep_id_t;
 
 
@@ -71,6 +68,11 @@ typedef struct xether_device_status
 	uint32_t					tx_packet_count;
 } xether_device_status_t;
 
+typedef struct xether_netc_config
+{
+	netc_hw_si_idx_t			hw_si_id;
+} xether_netc_config_t;
+
 typedef struct xether_ep_status
 {
 	phy_speed_t					last_speed;
@@ -78,7 +80,7 @@ typedef struct xether_ep_status
 	bool_t						last_link_up;
 } xether_ep_status_t;
 
-typedef struct xether_ep_handle
+typedef struct xether_netc_port_handle
 {
 	phy_handle_t				phy_handle;
 	phy_rtl8211f_resource_t		phy_resource;
@@ -86,7 +88,7 @@ typedef struct xether_ep_handle
 	netc_hw_si_idx_t			hw_si_id;
 
 	xether_ep_status_t			status;
-} xether_ep_handle_t;
+} xether_netc_port_handle_t;
 
 static struct
 {
@@ -496,92 +498,117 @@ static struct pbuf *xether_enet1g_rx_frame_to_pbufs(enet_rx_frame_struct_t *rxFr
 	return (p);
 }
 
-static bool_t xether_netc_ep_init(uint8_t index, const xether_config_t *config)
+static status_t xether_netc0_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
 {
-	bool_t					success = FALSE;
-	ep_config_t				ep_config;
-	enet_buffer_config_t	enet_buff_config;
-	uint16_t				i;
+	return (kStatus_Success);
+}
 
-	/* Zero clear */
-	memset(g_xether_enet1g_txdesc, 0, sizeof(g_xether_enet1g_txdesc));
-	memset(g_xether_enet1g_rxdesc, 0, sizeof(g_xether_enet1g_rxdesc));
+static status_t xether_netc1_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
+{
+	return (kStatus_Success);
+}
 
-	/* prepare the buffer configuration. */
-	enet_buff_config.txBdNumber      = ENET1G_TXBD_NUM;       /* Transmit buffer descriptor number. */
-	enet_buff_config.rxBdNumber      = ENET1G_RXBD_NUM;       /* Receive buffer descriptor number. */
-	enet_buff_config.txBuffSizeAlign = sizeof(xether_enet1g_tx_buff_t); /* Aligned transmit data buffer size. */
-	enet_buff_config.rxBuffSizeAlign = sizeof(xether_enet1g_rx_buff_t); /* Aligned receive data buffer size. */
-	enet_buff_config.txBdStartAddrAlign = &(g_xether_enet1g.tx_buff_descrip[0]); /* Aligned transmit buffer descriptor start address. */
-	enet_buff_config.rxBdStartAddrAlign = &(g_xether_enet1g.rx_buff_descrip[0]); /* Aligned receive buffer descriptor start address. */
-	enet_buff_config.txBufferAlign = &(g_xether_enet1g.tx_data_buff[0][0]); /* Transmit data buffer start address. */
-	enet_buff_config.rxBufferAlign = NULL; /* Receive data buffer start address. NULL when buffers are allocated by callback for RX zero-copy. */
-	enet_buff_config.txFrameInfo = NULL; /* Transmit frame information start address. Set only if using zero-copy transmit. */
-	enet_buff_config.txMaintainEnable = true; /* Transmit buffer cache maintain. */
-	enet_buff_config.rxMaintainEnable = true; /* Receive buffer cache maintain. */
 
-	/* Endpoint Config */
+static bool_t xether_netc_init(ep_handle_t *handle, uint8_t *macAddr, const ep_config_t *config, const netc_bdr_config_t *bdrConfig)
+{
+    status_t result                  = kStatus_Success;
+
+
+
+    netc_rx_bdr_config_t rxBdrConfig = {0};
+    netc_tx_bdr_config_t txBdrConfig = {0};
+    netc_bdr_config_t bdrConfig      = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
+    netc_buffer_struct_t txBuff      = {.buffer = &g_txFrame, .length = sizeof(g_txFrame)};
+    netc_frame_struct_t txFrame      = {.buffArray = &txBuff, .length = 1};
+    bool link                        = false;
+    netc_msix_entry_t msixEntry[2];
+    netc_hw_mii_mode_t phyMode;
+    netc_hw_mii_speed_t phySpeed;
+    netc_hw_mii_duplex_t phyDuplex;
+    ep_config_t ep_config;
+    uint32_t msgAddr;
+    uint32_t length;
+
+    PRINTF("\r\nNETC EP%d frame loopback example start.\r\n", index);
+
+    /* MSIX and interrupt configuration. */
+    MSGINTR_Init(EXAMPLE_MSGINTR, &msgintrCallback);
+    msgAddr              = MSGINTR_GetIntrSelectAddr(EXAMPLE_MSGINTR, 0);
+    msixEntry[0].control = kNETC_MsixIntrMaskBit;
+    msixEntry[0].msgAddr = msgAddr;
+    msixEntry[0].msgData = EXAMPLE_TX_INTR_MSG_DATA;
+    msixEntry[1].control = kNETC_MsixIntrMaskBit;
+    msixEntry[1].msgAddr = msgAddr;
+    msixEntry[1].msgData = EXAMPLE_RX_INTR_MSG_DATA;
+
+    /* BD ring configuration. */
+    bdrConfig.rxBdrConfig[0].bdArray       = &g_rxBuffDescrip[0][0];
+    bdrConfig.rxBdrConfig[0].len           = EXAMPLE_EP_RXBD_NUM;
+    bdrConfig.rxBdrConfig[0].buffAddrArray = &rxBuffAddrArray[0][0];
+    bdrConfig.rxBdrConfig[0].buffSize      = EXAMPLE_EP_RXBUFF_SIZE_ALIGN;
+    bdrConfig.rxBdrConfig[0].msixEntryIdx  = EXAMPLE_RX_MSIX_ENTRY_IDX;
+    bdrConfig.rxBdrConfig[0].extendDescEn  = false;
+    bdrConfig.rxBdrConfig[0].enThresIntr   = true;
+    bdrConfig.rxBdrConfig[0].enCoalIntr    = true;
+    bdrConfig.rxBdrConfig[0].intrThreshold = 1;
+
+    bdrConfig.txBdrConfig[0].bdArray      = &g_txBuffDescrip[0][0];
+    bdrConfig.txBdrConfig[0].len          = EXAMPLE_EP_TXBD_NUM;
+    bdrConfig.txBdrConfig[0].dirtyArray   = &g_txDirty[0][0];
+    bdrConfig.txBdrConfig[0].msixEntryIdx = EXAMPLE_TX_MSIX_ENTRY_IDX;
+    bdrConfig.txBdrConfig[0].enIntr       = true;
+
+    /* Wait PHY link up. */
+    PRINTF("Wait for PHY link up...\r\n");
+    do
+    {
+        result = APP_PHY_GetLinkStatus(index, &link);
+    } while ((result != kStatus_Success) || (!link));
+    result = APP_PHY_GetLinkModeSpeedDuplex(index, &phyMode, &phySpeed, &phyDuplex);
+    if (result != kStatus_Success)
+    {
+        return result;
+    }
+
+    /* Wait a moment for PHY status to be stable. */
+    SDK_DelayAtLeastUs(PHY_STABILITY_DELAY_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+	/* Endpoint configuration. */
 	EP_GetDefaultConfig(&ep_config);
 	ep_config.si                    = g_siIndex[index];
 	ep_config.siConfig.txRingUse    = 1;
 	ep_config.siConfig.rxRingUse    = 1;
 	ep_config.reclaimCallback       = APP_ReclaimCallback;
+	ep_config.userData				=
 	ep_config.msixEntry             = &msixEntry[0];
 	ep_config.entryNum              = 2;
 	ep_config.port.ethMac.miiMode   = phyMode;
 	ep_config.port.ethMac.miiSpeed  = phySpeed;
 	ep_config.port.ethMac.miiDuplex = phyDuplex;
 
-	ENET_GetDefaultConfig(&enet_config);
-	enet_config.miiMode = kENET_RgmiiMode;
-	enet_config.rxBuffAlloc = xether_enet1g_rx_alloc;
-	enet_config.rxBuffFree  = xether_enet1g_rx_free;
-	enet_config.userData    = NULL;
+#if (defined(FSL_FEATURE_NETC_HAS_ERRATA_052167) && FSL_FEATURE_NETC_HAS_ERRATA_052167)
+    /* ERR052167: Actual MAC Tx IPG is longer than configured when transmitting back-to-back packets in MII half duplex
+    mode by approximately 15 extra bytes. For example, when configured for IPG=12, the actual IPG will be
+    approximately 27. The net result is that maximum throughput will be reduced also in the absence of half-duplex
+    collision/retry events. When using MII protocol, using full-duplex mode is recommended instead of half-duplex. If
+    using MII half-duplex mode, additional bandwidth loss should be expected and accounted for due to extended IPG. */
+    assert(!((phyMode == kNETC_MiiMode) && (phyDuplex == kNETC_MiiHalfDuplex)));
+#endif
 
-	/* Used for detection of change.
-	   Initilize to value different than any possible enum value. */
-	g_xether_enet1g.last_speed   = (phy_speed_t)0xa5a5;
-	g_xether_enet1g.last_duplex  = (phy_duplex_t)0x5a5a;
-	g_xether_enet1g.last_link_up = FALSE;
+    result = EP_Init(&g_ep_handle, &g_macAddr[0], &ep_config, &bdrConfig);
 
-	if (xether_enet1g_phy_init())
-	{
-		status_t result;
+    /* Unmask MSIX message interrupt. */
+    EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_TX_MSIX_ENTRY_IDX, false);
+    EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_RX_MSIX_ENTRY_IDX, false);
 
-		for (i = 0; i < ENET1G_RXBUFF_NUM; i++)
-		{
-			g_xether_enet1g.rxpbuf_list[i].p.custom_free_function = xether_enet1g_rx_pbuf_free;
-			g_xether_enet1g.rxpbuf_list[i].buffer                 = &(g_xether_enet1g.rx_data_buff[i][0]);
-			g_xether_enet1g.rxpbuf_list[i].buffer_used            = FALSE;
-		}
-		g_xether_enet1g.rxpbuf_index = 0;
-
-		/* Initialize the ENET module. */
-		result = EP_Init(
-			ENET_1G,
-			&g_xether_enet1g.enet_handle,
-			&enet_config,
-			&enet_buff_config,
-			(uint8_t *)&config->mac_addr.addr[0],
-			CLOCK_GetRootClockFreq(kCLOCK_Root_Bus)
-		);
-
-		if (result == kStatus_Success)
-		{
-			ENET_ActiveRead(ENET_1G);
-
-			success = TRUE;
-		}
-	}
-
-	return (success);
+	return (result == kStatus_Success);
 }
 
-static void xether_netc_ep_deinit(uint8_t index)
+static void xether_netc_deinit(uint8_t index)
 {
 }
 
-static bool_t xether_netc_ep0_open(const xether_config_t *config)
+static bool_t xether_netc0_open(const xether_config_t *config)
 {
 	bool_t open_ok = FALSE;
 
@@ -590,12 +617,12 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 	return (open_ok);
 }
 
-static void xether_netc_ep0_close(void)
+static void xether_netc0_close(void)
 {
 	xether_netc_ep_deinit(0);
 }
 
-static struct pbuf *xether_netc_ep0_recv_packet_get(void)
+static struct pbuf *xether_netc0_recv_packet_get(void)
 {
 	enet_buffer_struct_t	buffers[ENET1G_MAX_BUFFERS_PER_FRAME];
 	enet_rx_frame_struct_t	rxFrame = {.rxBuffArray = &buffers[0] };
@@ -633,7 +660,7 @@ static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 	return (p);
 }
 
-static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
+static bool_t xether_netc0_send_packet_set(struct pbuf *p)
 {
 	err_t		result;
 	uint8_t *	pucBuffer = g_xether_enet1g.send_frame_buff;
@@ -667,7 +694,7 @@ static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 	return (TRUE);
 }
 
-static bool_t xether_netc_ep0_link_status_update(void)
+static bool_t xether_netc0_link_status_update(void)
 {
 	bool	link_status_raw;
 
@@ -744,7 +771,7 @@ static inline void xether_deinit_board(void)
 }
 
 XETHERNET_DEVICE_LIST_BEGIN()
-  XETHERNET_DEVICE_LIST_ITEM(xether_netc_ep0),
+  XETHERNET_DEVICE_LIST_ITEM(xether_netc0),
 XETHERNET_DEVICE_LIST_END()
 
 #endif /* XETHER_BOARD_H_ */
