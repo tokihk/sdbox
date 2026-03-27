@@ -13,23 +13,27 @@
 #include "lwip/pbuf.h"
 
 #include "netc/fsl_netc.h"
+#include "netc/fsl_netc_mdio.h"
+#include "netc/fsl_netc_switch.h"
 #include "netc/fsl_netc_endpoint.h"
+
+#include "fsl_msgintr.h"
 
 #include "fsl_phyrtl8201.h"
 #include "fsl_phyrtl8211f.h"
 
 
-#define NETC_EP_FRAME_LEN_MAX			(ENET_FRAME_MAX_FRAMELEN + ENET_FRAME_VLAN_TAGLEN)
+#define NETC_PHY_PAGE_SELECT_REG		0x1FU	/*!< The PHY page select register. */
 
-#define ENET1G_TXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
-#define ENET1G_RXBUFF_SIZE				(ENET1G_FRAME_LEN_MAX)
+#define NETC_PORT_MSGINTR				MSGINTR1
 
-#define ENET1G_TXBD_NUM					(24)
-#define ENET1G_RXBD_NUM					(24)
+#define NETC0_TX_INTR_MSG_DATA			1U
+#define NETC0_RX_INTR_MSG_DATA			2U
+#define NETC1_TX_INTR_MSG_DATA			3U
+#define NETC1_RX_INTR_MSG_DATA			4U
 
-#define ENET1G_RXBUFF_NUM				(ENET1G_RXBD_NUM * 2)
-
-#define ENET1G_MAX_BUFFERS_PER_FRAME	((ENET1G_FRAME_LEN_MAX / ENET1G_RXBUFF_SIZE) + ((ENET1G_FRAME_LEN_MAX % ENET1G_RXBUFF_SIZE == 0) ? 0 : 1))
+#define NETC_EP_TX_MSIX_ENTRY_IDX		0U
+#define NETC_EP_RX_MSIX_ENTRY_IDX		1U
 
 #define NETC_EP_BUFF_SIZE_ALIGN			64U
 #define NETC_EP_BD_ALIGN				128U
@@ -46,14 +50,32 @@
 #define NETC_EP_TXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_TXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
 
 
-typedef enum xether_netc_id
+typedef enum xether_netc_ep_id
 {
-	XETHER_NETC0,					/* ENETC0 */
-	XETHER_NETC1,					/* ENETC1 */
+	XETHER_NETC_EP0,				/* ENETC0 */
+	XETHER_NETC_EP1,				/* ENETC1 */
 
-	XETHER_NETC_NUM
+	XETHER_NETC_EP_MAX
 } xether_netc_ep_id_t;
 
+typedef enum xether_netc_port_id
+{
+	XETHER_NETC_PORT_ETH0,
+	XETHER_NETC_PORT_ETH1,
+	XETHER_NETC_PORT_ETH2,
+	XETHER_NETC_PORT_ETH3,
+	XETHER_NETC_PORT_ETH4,
+
+	XETHER_NETC_PORT_MAX
+} xether_netc_ep_id_t;
+
+typedef enum xether_netc_msix_entry_id
+{
+	XETHER_NETC_MSIX_ENTRYID_RX,
+	XETHER_NETC_MSIX_ENTRYID_TX,
+
+	XETHER_NETC_MSIX_ENTRYID_MAX,
+};
 
 typedef struct xether_rx_pbuf_wrapper
 {
@@ -90,10 +112,23 @@ typedef struct xether_netc_port_handle
 	xether_ep_status_t			status;
 } xether_netc_port_handle_t;
 
+typedef struct xether_netc_buffer
+{
+	netc_rx_bd_t				rx_buff_descriptor[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
+	uint8_t						rx_data_buff[NETC_EP_RXBUFF_SIZE_ALIGN];
+} xether_netc_buffer_t;
+
 static struct
 {
 	ENET_Type *					enet_base;
 	enet_handle_t				enet_handle;
+
+	ep_handle_t					ep_handle[XETHER_NETC_EP_MAX];
+
+	netc_mdio_handle_t			emdio_handle;
+
+	phy_rtl8211f_resource_t		phy_resource[XETHER_NETC_PORT_MAX];
+	phy_handle_t				phy_handle[XETHER_NETC_PORT_MAX];
 
 	uint32_t					txFlag;
 
@@ -108,32 +143,30 @@ static struct
 
 	uint8_t						send_frame_buff[ENET1G_FRAME_LEN_MAX];
 
-	phy_handle_t				phy_handle[XETHER_NEC_EP_NUM];
 	phy_speed_t					last_speed;
 	phy_duplex_t				last_duplex;
 	bool_t						last_link_up;
-} g_xether_enet1g;
+} g_xether_board;
 
 
-typedef uint8_t										netc_ep_rx_buffer_t[NETC_EP_RXBUFF_SIZE_ALIGN];
-typedef uint8_t										netc_ep_tx_buffer_t[NETC_EP_TXBUFF_SIZE_ALIGN];
+typedef uint8_t												netc_ep_rx_buffer_t[NETC_EP_RXBUFF_SIZE_ALIGN];
+typedef uint8_t												netc_ep_tx_buffer_t[NETC_EP_TXBUFF_SIZE_ALIGN];
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_rxBuffDescrip[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_rxDataBuff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_rxFrame[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_xether_netc0_rxBuffDescrip[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_xether_netc0_rxDataBuff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_xether_netc0_rxFrame[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_tx_buffer_t	g_txFrame[NETC_EP_TXBUFF_SIZE], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_txBuffDescrip[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_tx_buffer_t	g_xether_netc0_txFrame[NETC_EP_TXBUFF_SIZE], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_mgmtTxBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t			g_cmdBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_mgmtTxBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t			g_xether_netc0_cmdBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
 
+static uint64_t												g_xether_netc0_rxBuffAddrArray[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
+static netc_tx_frame_info_t									g_xether_netc0_mgmtTxDirty[NETC_EP_TXBD_NUM];
+static netc_tx_frame_info_t									g_xether_netc0_mgmtTxFrameInfo;
 
-static uint64_t												g_rxBuffAddrArray[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
-static netc_tx_frame_info_t									g_mgmtTxDirty[NETC_EP_TXBD_NUM];
-static netc_tx_frame_info_t									g_mgmtTxFrameInfo;
-
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t	g_txBuffDescrip[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
-static netc_tx_frame_info_t							g_txDirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
+static netc_tx_frame_info_t									g_xether_netc0_txDirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
 
 
 /* PHY operation. */
@@ -180,57 +213,82 @@ static inline void xether_netc_ep4_phy_reset_pin_set(bool_t reset)
 	RGPIO_PinWrite(RGPIO6, 15, (reset) ? (0) : (1));
 }
 
-static status_t APP_Phy8201SetUp(phy_handle_t *handle)
+status_t xether_netc_mdio_init(void)
 {
-    status_t result;
-    uint16_t data;
+	netc_mdio_config_t mdio_config =
+	{
+			.mdio.type			= kNETC_EMdio,
+			.isPreambleDisable	= false,
+			.isNegativeDriven	= false,
+			.srcClockHz			= CLOCK_GetRootClockFreq(kCLOCK_Root_Netc),
+	};
 
-    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 7);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-    result = PHY_Read(handle, 16, &data);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-
-    /* CRS/DV pin is RXDV signal. */
-    data |= (1U << 2);
-    result = PHY_Write(handle, 16, data);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-    result = PHY_Write(handle, PHY_PAGE_SELECT_REG, 0);
-
-    return result;
+    return (NETC_MDIOInit(&g_xether_board.emdio_handle, &mdio_config));
 }
 
-static status_t APP_PHY_SetPort(uint32_t port, phy_config_t *phyConfig)
+static status_t xether_netc_phy_mdio_write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
+{
+	return (NETC_MDIOWrite(&g_xether_board.emdio_handle, phy_addr, reg_addr, data));
+}
+
+static status_t xether_netc_phy_mdio_read(uint8_t phy_addr, uint8_t reg_addr, uint16_t *buffer)
+{
+	return (NETC_MDIORead(&g_xether_board.emdio_handle, phy_addr, reg_addr, buffer));
+}
+
+static status_t xether_netc_phy_setup_rtl8201(phy_handle_t *handle)
+{
+	status_t result;
+	uint16_t data;
+
+	result = PHY_Write(handle, NETC_PHY_PAGE_SELECT_REG, 7);
+	if (result != kStatus_Success)
+	{
+		return result;
+	}
+
+	result = PHY_Read(handle, 16, &data);
+	if (result != kStatus_Success)
+	{
+		return result;
+	}
+
+	/* CRS/DV pin is RXDV signal. */
+	data |= (1U << 2);
+	result = PHY_Write(handle, 16, data);
+	if (result != kStatus_Success)
+	{
+		return result;
+	}
+
+	result = PHY_Write(handle, NETC_PHY_PAGE_SELECT_REG, 0);
+
+	return (result);
+}
+
+static status_t xether_netc_phy_init(uint32_t port, phy_config_t *phy_config)
+{
+    if (port >= XCOUNTOF(g_xether_board.phy_resource))
+    {
+    	return (kStatus_OutOfRange);
+    }
+
+	g_xether_board.phy_resource[port].write = xether_netc_phy_mdio_write;
+	g_xether_board.phy_resource[port].read  = xether_netc_phy_mdio_read;
+
+	return (PHY_Init(&g_xether_board.phy_handle[port], phy_config));
+}
+
+status_t xether_netc_phy_link_status_get(uint32_t port, bool *link)
+{
+	return (PHY_GetLinkStatus(&g_xether_board.phy_handle[port], link));
+}
+
+
+static status_t xether_netc_port_init(void)
 {
     status_t result = kStatus_Success;
 
-#ifdef EXAMPLE_PHY_USE_PORT_MDIO
-    s_phy_resource[port].write = APP_PMDIOWrite;
-    s_phy_resource[port].read  = APP_PMDIORead;
-#else
-    s_phy_resource[port].write = APP_EMDIOWrite;
-    s_phy_resource[port].read  = APP_EMDIORead;
-#endif
-    result = PHY_Init(&s_phy_handle[port], phyConfig);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-
-    return PHY_EnableLoopback(&s_phy_handle[port], kPHY_LocalLoop, phyConfig->speed, true);
-}
-
-status_t APP_PHY_Init(void)
-{
-    status_t result            = kStatus_Success;
     phy_config_t phy8211Config = {
         .autoNeg   = false,
         .speed     = kPHY_Speed1000M,
@@ -266,236 +324,84 @@ status_t APP_PHY_Init(void)
     SDK_DelayAtLeastUs(150000, CLOCK_GetFreq(kCLOCK_CpuClk));
 
     /* Initialize PHY for EP. */
-    phy8201Config.resource = &s_phy_resource[EXAMPLE_EP0_PORT];
+    phy8201Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH4];
     phy8201Config.phyAddr  = BOARD_EP0_PHY_ADDR;
-    result                 = APP_PHY_SetPort(EXAMPLE_EP0_PORT, &phy8201Config);
+
+    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH4, &phy8201Config);
     if (result != kStatus_Success)
     {
         return result;
     }
-    result = APP_Phy8201SetUp(&s_phy_handle[EXAMPLE_EP0_PORT]);
+
+    result = xether_netc_phy_setup_rtl8201(&g_xether_board.phy_handle[XETHER_NETC_PORT_ETH4]);
     if (result != kStatus_Success)
     {
         return result;
     }
-#if defined(EXAMPLE_PORT_USE_100M_HALF_DUPLEX_MODE)
-    uint16_t phyRegValue;
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 0x1F, 7);
-    (void)PHY_Read(&s_phy_handle[EXAMPLE_EP0_PORT], 20, &phyRegValue);
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 20, (phyRegValue | 0x900U));
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_EP0_PORT], 0x1F, 0);
-#endif
 
     /* Initialize PHY for switch port0. */
-    phy8201Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT0];
+    phy8201Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH0];
     phy8201Config.phyAddr  = BOARD_SWT_PORT0_PHY_ADDR;
-    result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT0, &phy8201Config);
+
+    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH0, &phy8201Config);
     if (result != kStatus_Success)
     {
         return result;
     }
-    result = APP_Phy8201SetUp(&s_phy_handle[EXAMPLE_SWT_PORT0]);
+
+    result = xether_netc_phy_setup_rtl8201(&g_xether_board.phy_handle[XETHER_NETC_PORT_ETH0]);
     if (result != kStatus_Success)
     {
         return result;
     }
-#if defined(EXAMPLE_PORT_USE_100M_HALF_DUPLEX_MODE)
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 0x1F, 7);
-    (void)PHY_Read(&s_phy_handle[EXAMPLE_SWT_PORT0], 20, &phyRegValue);
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 20, (phyRegValue | 0x900U));
-    (void)PHY_Write(&s_phy_handle[EXAMPLE_SWT_PORT0], 0x1F, 0);
-#endif
 
     /* Initialize PHY for switch port1. */
-    phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT1];
+    phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH1];
     phy8211Config.phyAddr  = BOARD_SWT_PORT1_PHY_ADDR;
-    result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT1, &phy8211Config);
+
+    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH1, &phy8211Config);
     if (result != kStatus_Success)
     {
         return result;
     }
 
-    if (((1U << 2) & EXAMPLE_SWT_USED_PORT_BITMAP) != 0U)
-    {
-        /* Initialize PHY for switch port2. */
-        phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT2];
-        phy8211Config.phyAddr  = BOARD_SWT_PORT2_PHY_ADDR;
-        result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT2, &phy8211Config);
-        if (result != kStatus_Success)
-        {
-            return result;
-        }
-    }
+	/* Initialize PHY for switch port2. */
+	phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH2];
+	phy8211Config.phyAddr  = BOARD_SWT_PORT2_PHY_ADDR;
 
-    if (((1U << 3) & EXAMPLE_SWT_USED_PORT_BITMAP) != 0U)
-    {
-        /* Initialize PHY for switch port3. */
-        phy8211Config.resource = &s_phy_resource[EXAMPLE_SWT_PORT3];
-        phy8211Config.phyAddr  = BOARD_SWT_PORT3_PHY_ADDR;
-        result                 = APP_PHY_SetPort(EXAMPLE_SWT_PORT3, &phy8211Config);
-        if (result != kStatus_Success)
-        {
-            return result;
-        }
-    }
-
-    return result;
-}
-
-status_t APP_PHY_GetLinkStatus(uint32_t port, bool *link)
-{
-    return PHY_GetLinkStatus(&s_phy_handle[port], link);
-}
-
-
-status_t APP_MDIO_Init(void)
-{
-    status_t result = kStatus_Success;
-
-    netc_mdio_config_t mdioConfig = {
-        .isPreambleDisable = false,
-        .isNegativeDriven  = false,
-        .srcClockHz        = EXAMPLE_NETC_FREQ,
-    };
-
-#ifdef EXAMPLE_PHY_USE_PORT_MDIO
-    /* Usually should call EP_Init/SWT_Init then init port MDIO, here just an quick enablement example. */
-    NETC_F2_PCI_HDR_TYPE0->PCI_CFH_CMD |=
-        (ENETC_PCI_TYPE0_PCI_CFH_CMD_MEM_ACCESS_MASK | ENETC_PCI_TYPE0_PCI_CFH_CMD_BUS_MASTER_EN_MASK);
-    NETC_F3_PCI_HDR_TYPE0->PCI_CFH_CMD |=
-        (ENETC_PCI_TYPE0_PCI_CFH_CMD_MEM_ACCESS_MASK | ENETC_PCI_TYPE0_PCI_CFH_CMD_BUS_MASTER_EN_MASK);
-
-    for (int i = 0U; i < 5U; i++)
-    {
-        mdioConfig.mdio.port = (netc_hw_eth_port_idx_t)((uint32_t)kNETC_ENETC0EthPort + i);
-        result               = NETC_MDIOInit(&s_mdio_handle[i], &mdioConfig);
-        if (result != kStatus_Success)
-        {
-            return result;
-        }
-    }
-#else
-    mdioConfig.mdio.type = kNETC_EMdio;
-    result               = NETC_MDIOInit(&s_emdio_handle, &mdioConfig);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-#endif
-
-    return result;
-}
-
-static status_t APP_EMDIOWrite(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
-{
-    return NETC_MDIOWrite(&s_emdio_handle, phyAddr, regAddr, data);
-}
-
-static status_t APP_EMDIORead(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
-{
-    return NETC_MDIORead(&s_emdio_handle, phyAddr, regAddr, pData);
-}
-
-static void xether_enet1g_mdio_init(void)
-{
-	CLOCK_EnableClock(s_enetClock[ENET_GetInstance(ENET_1G)]);
-
-	ENET_SetSMI(ENET_1G, CLOCK_GetRootClockFreq(kCLOCK_Root_Bus), false);
-}
-
-static status_t xether_netc_ep_mdio_write(uint8_t phyAddr, uint8_t regAddr, uint16_t data)
-{
-    return ENET_MDIOWrite(ENET_1G, phyAddr, regAddr, data);
-}
-
-static status_t xether_netc_ep_mdio_read(uint8_t phyAddr, uint8_t regAddr, uint16_t *pData)
-{
-    return ENET_MDIORead(ENET_1G, phyAddr, regAddr, pData);
-}
-
-static bool_t xether_netc_ep_phy_init(void)
-{
-	status_t status;
-
-	xether_enet1g_mdio_init();
-
-	g_enet1g_phy_resource.write = xether_enet1g_mdio_write;
-	g_enet1g_phy_resource.read  = xether_enet1g_mdio_read;
-
-	status = PHY_Init(&g_xether_enet1g.phy_handle, &XETHER_ENET1G_PHY_CONFIG);
-
-	return ((status == kStatus_Success) ? (TRUE) : (FALSE));
-}
-
-static void *xether_enet1g_rx_alloc(ENET_Type *base, void *userData, uint8_t ringId)
-{
-	register uint16_t count;
-
-	for (count = 0; count < ENET1G_RXBUFF_NUM; count++) {
-		if (!g_xether_enet1g.rxpbuf_list[count].buffer_used) {
-			g_xether_enet1g.rxpbuf_list[count].buffer_used = TRUE;
-			return (g_xether_enet1g.rxpbuf_list[count].buffer);
-		}
-	}
-
-	return (NULL);
-}
-
-static void xether_enet1g_rx_free(ENET_Type *base, void *buffer, void *userData, uint8_t ringId)
-{
-	uint16_t	idx = ((xether_enet1g_rx_buff_t *)buffer) - g_xether_enet1g.rx_data_buff;
-
-	g_xether_enet1g.rxpbuf_list[idx].buffer_used = FALSE;
-}
-
-static void xether_enet1g_rx_pbuf_free(struct pbuf *p)
-{
-	xether_rx_pbuf_wrapper_t *	wrapper = (xether_rx_pbuf_wrapper_t *)p;
-
-	xether_enet1g_rx_free(ENET_1G, wrapper->buffer, NULL, 0);
-}
-
-/** Wraps received buffer(s) into a pbuf or a pbuf chain and returns it. */
-static struct pbuf *xether_enet1g_rx_frame_to_pbufs(enet_rx_frame_struct_t *rxFrame)
-{
-	void *buffer;
-	uint16_t bufferLength;
-	xether_rx_pbuf_wrapper_t *wrapper;
-	uint16_t len   = 0U;
-	struct pbuf *p = NULL;
-	struct pbuf *q = NULL;
-	int idx;
-	int i;
-
-	for (i = 0; ((i < ENET1G_MAX_BUFFERS_PER_FRAME) && (len < rxFrame->totLen)); i++)
+	result = xether_netc_phy_init(XETHER_NETC_PORT_ETH2, &phy8211Config);
+	if (result != kStatus_Success)
 	{
-		buffer       = rxFrame->rxBuffArray[i].buffer;
-		bufferLength = rxFrame->rxBuffArray[i].length;
-		len += bufferLength;
-
-		/* Find pbuf wrapper for the actually read byte buffer */
-		idx = ((xether_enet1g_rx_buff_t *)buffer) - g_xether_enet1g.rx_data_buff;
-		LWIP_ASSERT("Buffer returned by ENET_GetRxFrame() doesn't match any RX buffer descriptor",
-					((idx >= 0) && (idx < ENET1G_RXBUFF_NUM)));
-		wrapper = &g_xether_enet1g.rxpbuf_list[idx];
-		LWIP_ASSERT("Buffer returned by ENET_GetRxFrame() doesn't match wrapper buffer", wrapper->buffer == buffer);
-
-		/* Wrap the received buffer in pbuf. */
-		if (p == NULL)
-		{
-			p = pbuf_alloced_custom(PBUF_RAW, bufferLength, PBUF_REF, &wrapper->p, buffer, bufferLength);
-			LWIP_ASSERT("pbuf_alloced_custom() failed", p);
-		}
-		else
-		{
-			q = pbuf_alloced_custom(PBUF_RAW, bufferLength, PBUF_REF, &wrapper->p, buffer, bufferLength);
-			LWIP_ASSERT("pbuf_alloced_custom() failed", q);
-
-			pbuf_cat(p, q);
-		}
+		return result;
 	}
 
-	return (p);
+	/* Initialize PHY for switch port3. */
+	phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH3];
+	phy8211Config.phyAddr  = BOARD_SWT_PORT3_PHY_ADDR;
+
+	result = xether_netc_phy_init(XETHER_NETC_PORT_ETH3, &phy8211Config);
+	if (result != kStatus_Success)
+	{
+		return result;
+	}
+
+    return result;
+}
+
+
+static void xether_netc_msgintr_callback(MSGINTR_Type *base, uint8_t channel, uint32_t pendingIntr)
+{
+	/* NETC0 Transmit interrupt */
+	if ((pendingIntr & (1U << EXAMPLE_TX_INTR_MSG_DATA)) != 0U)
+	{
+		EP_CleanTxIntrFlags(&g_ep_handle, 1, 0);
+	}
+
+	/* NETC0 Receive interrupt */
+	if ((pendingIntr & (1U << EXAMPLE_RX_INTR_MSG_DATA)) != 0U)
+	{
+		EP_CleanRxIntrFlags(&g_ep_handle, 1);
+	}
 }
 
 static status_t xether_netc0_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
@@ -509,120 +415,119 @@ static status_t xether_netc1_reclaim_callback(ep_handle_t *handle, uint8_t ring,
 }
 
 
-static bool_t xether_netc_init(ep_handle_t *handle, uint8_t *macAddr, const ep_config_t *config, const netc_bdr_config_t *bdrConfig)
+static bool_t xether_netc_init(ep_handle_t *handle, uint8_t *mac_addr, const ep_config_t *ep_config, const netc_bdr_config_t *bdr_config)
 {
-    status_t result                  = kStatus_Success;
-
-
-
-    netc_rx_bdr_config_t rxBdrConfig = {0};
-    netc_tx_bdr_config_t txBdrConfig = {0};
-    netc_bdr_config_t bdrConfig      = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
-    netc_buffer_struct_t txBuff      = {.buffer = &g_txFrame, .length = sizeof(g_txFrame)};
-    netc_frame_struct_t txFrame      = {.buffArray = &txBuff, .length = 1};
-    bool link                        = false;
-    netc_msix_entry_t msixEntry[2];
-    netc_hw_mii_mode_t phyMode;
-    netc_hw_mii_speed_t phySpeed;
-    netc_hw_mii_duplex_t phyDuplex;
-    ep_config_t ep_config;
-    uint32_t msgAddr;
-    uint32_t length;
-
-    PRINTF("\r\nNETC EP%d frame loopback example start.\r\n", index);
-
-    /* MSIX and interrupt configuration. */
-    MSGINTR_Init(EXAMPLE_MSGINTR, &msgintrCallback);
-    msgAddr              = MSGINTR_GetIntrSelectAddr(EXAMPLE_MSGINTR, 0);
-    msixEntry[0].control = kNETC_MsixIntrMaskBit;
-    msixEntry[0].msgAddr = msgAddr;
-    msixEntry[0].msgData = EXAMPLE_TX_INTR_MSG_DATA;
-    msixEntry[1].control = kNETC_MsixIntrMaskBit;
-    msixEntry[1].msgAddr = msgAddr;
-    msixEntry[1].msgData = EXAMPLE_RX_INTR_MSG_DATA;
-
-    /* BD ring configuration. */
-    bdrConfig.rxBdrConfig[0].bdArray       = &g_rxBuffDescrip[0][0];
-    bdrConfig.rxBdrConfig[0].len           = EXAMPLE_EP_RXBD_NUM;
-    bdrConfig.rxBdrConfig[0].buffAddrArray = &rxBuffAddrArray[0][0];
-    bdrConfig.rxBdrConfig[0].buffSize      = EXAMPLE_EP_RXBUFF_SIZE_ALIGN;
-    bdrConfig.rxBdrConfig[0].msixEntryIdx  = EXAMPLE_RX_MSIX_ENTRY_IDX;
-    bdrConfig.rxBdrConfig[0].extendDescEn  = false;
-    bdrConfig.rxBdrConfig[0].enThresIntr   = true;
-    bdrConfig.rxBdrConfig[0].enCoalIntr    = true;
-    bdrConfig.rxBdrConfig[0].intrThreshold = 1;
-
-    bdrConfig.txBdrConfig[0].bdArray      = &g_txBuffDescrip[0][0];
-    bdrConfig.txBdrConfig[0].len          = EXAMPLE_EP_TXBD_NUM;
-    bdrConfig.txBdrConfig[0].dirtyArray   = &g_txDirty[0][0];
-    bdrConfig.txBdrConfig[0].msixEntryIdx = EXAMPLE_TX_MSIX_ENTRY_IDX;
-    bdrConfig.txBdrConfig[0].enIntr       = true;
-
-    /* Wait PHY link up. */
-    PRINTF("Wait for PHY link up...\r\n");
-    do
-    {
-        result = APP_PHY_GetLinkStatus(index, &link);
-    } while ((result != kStatus_Success) || (!link));
-    result = APP_PHY_GetLinkModeSpeedDuplex(index, &phyMode, &phySpeed, &phyDuplex);
-    if (result != kStatus_Success)
-    {
-        return result;
-    }
-
-    /* Wait a moment for PHY status to be stable. */
-    SDK_DelayAtLeastUs(PHY_STABILITY_DELAY_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
-
-	/* Endpoint configuration. */
-	EP_GetDefaultConfig(&ep_config);
-	ep_config.si                    = g_siIndex[index];
-	ep_config.siConfig.txRingUse    = 1;
-	ep_config.siConfig.rxRingUse    = 1;
-	ep_config.reclaimCallback       = APP_ReclaimCallback;
-	ep_config.userData				=
-	ep_config.msixEntry             = &msixEntry[0];
-	ep_config.entryNum              = 2;
-	ep_config.port.ethMac.miiMode   = phyMode;
-	ep_config.port.ethMac.miiSpeed  = phySpeed;
-	ep_config.port.ethMac.miiDuplex = phyDuplex;
-
-#if (defined(FSL_FEATURE_NETC_HAS_ERRATA_052167) && FSL_FEATURE_NETC_HAS_ERRATA_052167)
-    /* ERR052167: Actual MAC Tx IPG is longer than configured when transmitting back-to-back packets in MII half duplex
-    mode by approximately 15 extra bytes. For example, when configured for IPG=12, the actual IPG will be
-    approximately 27. The net result is that maximum throughput will be reduced also in the absence of half-duplex
-    collision/retry events. When using MII protocol, using full-duplex mode is recommended instead of half-duplex. If
-    using MII half-duplex mode, additional bandwidth loss should be expected and accounted for due to extended IPG. */
-    assert(!((phyMode == kNETC_MiiMode) && (phyDuplex == kNETC_MiiHalfDuplex)));
-#endif
-
-    result = EP_Init(&g_ep_handle, &g_macAddr[0], &ep_config, &bdrConfig);
-
-    /* Unmask MSIX message interrupt. */
-    EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_TX_MSIX_ENTRY_IDX, false);
-    EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_RX_MSIX_ENTRY_IDX, false);
-
-	return (result == kStatus_Success);
 }
 
 static void xether_netc_deinit(uint8_t index)
 {
 }
 
-static bool_t xether_netc0_open(const xether_config_t *config)
+static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
-	bool_t open_ok = FALSE;
+	status_t result                  = kStatus_Success;
 
-	open_ok = xether_netc_ep_init(0, config);
+	if (   (mac_addr != NULL)
+		&& (ep_config != NULL)
+		&& (bdr_config != NULL)
+	) {
+		netc_rx_bdr_config_t	rxBdrConfig = {0};
+		netc_tx_bdr_config_t	txBdrConfig = {0};
+		netc_bdr_config_t		bdrConfig = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
+		netc_buffer_struct_t	txBuff = {.buffer = &g_txFrame, .length = sizeof(g_txFrame)};
+		netc_frame_struct_t		txFrame = {.buffArray = &txBuff, .length = 1};
+		bool_t					link = false;
+		netc_msix_entry_t		msix_entry[XETHER_NETC_MSIX_ENTRYID_MAX];
+		netc_hw_mii_mode_t		phy_mode;
+		netc_hw_mii_speed_t		phy_speed;
+		netc_hw_mii_duplex_t	phy_duplex;
+		ep_config_t				ep_config;
+		uint32_t				msg_addr;
+		uint32_t				length;
 
-	return (open_ok);
+		/* MSIX and interrupt configuration. */
+		MSGINTR_Init(XETHER_NETC0_MSGINTR, &xether_msgintr_callback);
+		msg_addr = MSGINTR_GetIntrSelectAddr(XETHER_NETC0_MSGINTR, 0);
+
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_RX].control = kNETC_MsixIntrMaskBit;
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_RX].msgAddr = msg_addr;
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_RX].msgData = NETC0_RX_INTR_MSG_DATA;
+
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_TX].control = kNETC_MsixIntrMaskBit;
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_TX].msgAddr = msg_addr;
+		msix_entry[XETHER_NETC_MSIX_ENTRYID_TX].msgData = NETC0_TX_INTR_MSG_DATA;
+
+		/* BD ring configuration. */
+		bdrConfig.rxBdrConfig[0].bdArray       = &g_xether_netc0_rxbuff_desc[0][0];
+		bdrConfig.rxBdrConfig[0].len           = NETC0_RXBD_NUM;
+		bdrConfig.rxBdrConfig[0].buffAddrArray = &g_xether_netc0_rxbuff_addr_array[0][0];
+		bdrConfig.rxBdrConfig[0].buffSize      = NETC0_RXBUFF_SIZE_ALIGN;
+		bdrConfig.rxBdrConfig[0].msixEntryIdx  = NETC0_RX_MSIX_ENTRY_IDX;
+		bdrConfig.rxBdrConfig[0].extendDescEn  = false;
+		bdrConfig.rxBdrConfig[0].enThresIntr   = true;
+		bdrConfig.rxBdrConfig[0].enCoalIntr    = true;
+		bdrConfig.rxBdrConfig[0].intrThreshold = 1;
+
+		bdrConfig.txBdrConfig[0].bdArray      = &g_xether_netc0_txbuff_desc[0][0];
+		bdrConfig.txBdrConfig[0].len          = NETC0_TXBD_NUM;
+		bdrConfig.txBdrConfig[0].dirtyArray   = &g_xether_netc0_txdirty[0][0];
+		bdrConfig.txBdrConfig[0].msixEntryIdx = NETC0_TX_MSIX_ENTRY_IDX;
+		bdrConfig.txBdrConfig[0].enIntr       = true;
+
+		/* Wait PHY link up. */
+		do
+		{
+			result = APP_PHY_GetLinkStatus(index, &link);
+		} while ((result != kStatus_Success) || (!link));
+		result = APP_PHY_GetLinkModeSpeedDuplex(index, &phyMode, &phySpeed, &phyDuplex);
+		if (result != kStatus_Success)
+		{
+			return result;
+		}
+
+		/* Wait a moment for PHY status to be stable. */
+		SDK_DelayAtLeastUs(PHY_STABILITY_DELAY_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+		/* Endpoint configuration. */
+		EP_GetDefaultConfig(&ep_config);
+		ep_config.si                    = g_siIndex[index];
+		ep_config.siConfig.txRingUse    = 1;
+		ep_config.siConfig.rxRingUse    = 1;
+		ep_config.reclaimCallback       = xether_netc0_reclaim_callback;
+		ep_config.userData				=
+		ep_config.msixEntry             = &msixEntry[0];
+		ep_config.entryNum              = 2;
+		ep_config.port.ethMac.miiMode   = phyMode;
+		ep_config.port.ethMac.miiSpeed  = phySpeed;
+		ep_config.port.ethMac.miiDuplex = phyDuplex;
+
+		#if (defined(FSL_FEATURE_NETC_HAS_ERRATA_052167) && FSL_FEATURE_NETC_HAS_ERRATA_052167)
+		/* ERR052167: Actual MAC Tx IPG is longer than configured when transmitting back-to-back packets in MII half duplex
+		mode by approximately 15 extra bytes. For example, when configured for IPG=12, the actual IPG will be
+		approximately 27. The net result is that maximum throughput will be reduced also in the absence of half-duplex
+		collision/retry events. When using MII protocol, using full-duplex mode is recommended instead of half-duplex. If
+		using MII half-duplex mode, additional bandwidth loss should be expected and accounted for due to extended IPG. */
+		assert(!((phyMode == kNETC_MiiMode) && (phyDuplex == kNETC_MiiHalfDuplex)));
+		#endif
+
+		result = EP_Init(&g_ep_handle, &g_macAddr[0], &ep_config, &bdrConfig);
+
+		/* Unmask MSIX message interrupt. */
+		EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_TX_MSIX_ENTRY_IDX, false);
+		EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_RX_MSIX_ENTRY_IDX, false);
+
+	}
+
+
+	return (result == kStatus_Success);
 }
 
-static void xether_netc0_close(void)
+static void xether_netc_ep0_close(void)
 {
 	xether_netc_ep_deinit(0);
 }
 
-static struct pbuf *xether_netc0_recv_packet_get(void)
+static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 {
 	enet_buffer_struct_t	buffers[ENET1G_MAX_BUFFERS_PER_FRAME];
 	enet_rx_frame_struct_t	rxFrame = {.rxBuffArray = &buffers[0] };
@@ -660,7 +565,7 @@ static struct pbuf *xether_netc0_recv_packet_get(void)
 	return (p);
 }
 
-static bool_t xether_netc0_send_packet_set(struct pbuf *p)
+static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 {
 	err_t		result;
 	uint8_t *	pucBuffer = g_xether_enet1g.send_frame_buff;
@@ -694,7 +599,7 @@ static bool_t xether_netc0_send_packet_set(struct pbuf *p)
 	return (TRUE);
 }
 
-static bool_t xether_netc0_link_status_update(void)
+static bool_t xether_netc_ep0_link_status_update(void)
 {
 	bool	link_status_raw;
 
@@ -771,7 +676,7 @@ static inline void xether_deinit_board(void)
 }
 
 XETHERNET_DEVICE_LIST_BEGIN()
-  XETHERNET_DEVICE_LIST_ITEM(xether_netc0),
+  XETHERNET_DEVICE_LIST_ITEM(xether_netc_ep0),
 XETHERNET_DEVICE_LIST_END()
 
 #endif /* XETHER_BOARD_H_ */
