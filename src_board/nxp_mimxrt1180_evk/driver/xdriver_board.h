@@ -20,6 +20,8 @@
 #include "fsl_edma.h"
 #include "fsl_rgpio.h"
 
+#include "board.h"
+
 #include "pin_mux.h"
 
 #include "clock_config.h"

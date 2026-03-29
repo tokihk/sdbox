@@ -25,7 +25,7 @@
 
 #define NETC_PHY_PAGE_SELECT_REG		0x1FU	/*!< The PHY page select register. */
 
-#define NETC_PORT_MSGINTR				MSGINTR1
+#define NETC_EP0_MSGINTR				MSGINTR1
 
 #define NETC0_TX_INTR_MSG_DATA			1U
 #define NETC0_RX_INTR_MSG_DATA			2U
@@ -38,16 +38,17 @@
 #define NETC_EP_BUFF_SIZE_ALIGN			64U
 #define NETC_EP_BD_ALIGN				128U
 
-#define NETC_EP_RXRING_NUM				3U
-#define NETC_EP_RXBD_NUM				8U
 #define NETC_EP_RXBUFF_SIZE				1522U
 #define NETC_EP_RXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_RXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
-
-#define NETC_EP_TXRING_NUM				3U
-#define NETC_EP_TXFRAME_NUM				20U
-#define NETC_EP_TXBD_NUM				8U
 #define NETC_EP_TXBUFF_SIZE				1522U
 #define NETC_EP_TXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_TXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
+
+#define NETC_EP0_RXRING_NUM				3U
+#define NETC_EP0_RXBD_NUM				8U
+
+#define NETC_EP0_TXRING_NUM				3U
+#define NETC_EP0_TXFRAME_NUM			20U
+#define NETC_EP0_TXBD_NUM				8U
 
 
 typedef enum xether_netc_ep_id
@@ -67,7 +68,7 @@ typedef enum xether_netc_port_id
 	XETHER_NETC_PORT_ETH4,
 
 	XETHER_NETC_PORT_MAX
-} xether_netc_ep_id_t;
+} xether_netc_port_id_t;
 
 typedef enum xether_netc_msix_entry_id
 {
@@ -75,7 +76,7 @@ typedef enum xether_netc_msix_entry_id
 	XETHER_NETC_MSIX_ENTRYID_TX,
 
 	XETHER_NETC_MSIX_ENTRYID_MAX,
-};
+} xether_netc_msix_entry_id_t;
 
 typedef struct xether_rx_pbuf_wrapper
 {
@@ -112,17 +113,8 @@ typedef struct xether_netc_port_handle
 	xether_ep_status_t			status;
 } xether_netc_port_handle_t;
 
-typedef struct xether_netc_buffer
-{
-	netc_rx_bd_t				rx_buff_descriptor[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
-	uint8_t						rx_data_buff[NETC_EP_RXBUFF_SIZE_ALIGN];
-} xether_netc_buffer_t;
-
 static struct
 {
-	ENET_Type *					enet_base;
-	enet_handle_t				enet_handle;
-
 	ep_handle_t					ep_handle[XETHER_NETC_EP_MAX];
 
 	netc_mdio_handle_t			emdio_handle;
@@ -131,17 +123,6 @@ static struct
 	phy_handle_t				phy_handle[XETHER_NETC_PORT_MAX];
 
 	uint32_t					txFlag;
-
-	enet_tx_bd_struct_t *		tx_buff_descrip;
-	enet_rx_bd_struct_t *		rx_buff_descrip;
-
-	xether_enet1g_tx_buff_t *	tx_data_buff;
-	xether_enet1g_rx_buff_t *	rx_data_buff;
-
-	xether_rx_pbuf_wrapper_t	rxpbuf_list[ENET1G_RXBUFF_NUM];
-	uint16_t					rxpbuf_index;
-
-	uint8_t						send_frame_buff[ENET1G_FRAME_LEN_MAX];
 
 	phy_speed_t					last_speed;
 	phy_duplex_t				last_duplex;
@@ -152,40 +133,21 @@ static struct
 typedef uint8_t												netc_ep_rx_buffer_t[NETC_EP_RXBUFF_SIZE_ALIGN];
 typedef uint8_t												netc_ep_tx_buffer_t[NETC_EP_TXBUFF_SIZE_ALIGN];
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_xether_netc0_rxBuffDescrip[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_xether_netc0_rxDataBuff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_xether_netc0_rxFrame[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_xether_netc0_rxbuff_descriptor[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_xether_netc0_rxdata_buff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_xether_netc0_rxframe[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_txBuffDescrip[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_tx_buffer_t	g_xether_netc0_txFrame[NETC_EP_TXBUFF_SIZE], NETC_EP_BUFF_SIZE_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_txbuff_descriptor[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_tx_buffer_t	g_xether_netc0_txframe[NETC_EP_TXBUFF_SIZE], NETC_EP_BUFF_SIZE_ALIGN);
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_mgmtTxBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t			g_xether_netc0_cmdBuffDescrip[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bd_t			g_xether_netc0_mgmt_txBuff_descriptor[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_cmd_bd_t			g_xether_netc0_cmd_buff_descriptor[NETC_EP_TXBD_NUM], NETC_EP_BD_ALIGN);
 
-static uint64_t												g_xether_netc0_rxBuffAddrArray[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
-static netc_tx_frame_info_t									g_xether_netc0_mgmtTxDirty[NETC_EP_TXBD_NUM];
-static netc_tx_frame_info_t									g_xether_netc0_mgmtTxFrameInfo;
+static uint64_t												g_xether_netc0_rxbuff_addr_array[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM];
+static netc_tx_frame_info_t									g_xether_netc0_mgmt_txdirty[NETC_EP_TXBD_NUM];
+static netc_tx_frame_info_t									g_xether_netc0_mgmt_txframe_info;
 
-static netc_tx_frame_info_t									g_xether_netc0_txDirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
-
-
-/* PHY operation. */
-static netc_mdio_handle_t			g_mdio_handle;
-static phy_rtl8201_resource_t		g_phy_rtl8201_resource;
-
-static const phy_operations_t		g_app_phy_rtl8201_ops =
-{
-		.phyInit            = APP_PHY_RTL8201_Init,
-		.phyWrite           = PHY_RTL8201_Write,
-		.phyRead            = PHY_RTL8201_Read,
-		.getAutoNegoStatus  = PHY_RTL8201_GetAutoNegotiationStatus,
-		.getLinkStatus      = PHY_RTL8201_GetLinkStatus,
-		.getLinkSpeedDuplex = PHY_RTL8201_GetLinkSpeedDuplex,
-		.setLinkSpeedDuplex = PHY_RTL8201_SetLinkSpeedDuplex,
-		.enableLoopback     = PHY_RTL8201_EnableLoopback,
-		.enableLinkInterrupt= PHY_RTL8201_EnableLinkInterrupt,
-		.clearInterrupt     = PHY_RTL8201_ClearInterrupt
-};
+static netc_tx_frame_info_t									g_xether_netc0_tx_dirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
 
 
 static inline void xether_netc_ep0_phy_reset_pin_set(bool_t reset)
@@ -389,31 +351,25 @@ static status_t xether_netc_port_init(void)
 }
 
 
-static void xether_netc_msgintr_callback(MSGINTR_Type *base, uint8_t channel, uint32_t pendingIntr)
+static void xether_netc_ep0_msgintr_callback(MSGINTR_Type *base, uint8_t channel, uint32_t pendingIntr)
 {
-	/* NETC0 Transmit interrupt */
-	if ((pendingIntr & (1U << EXAMPLE_TX_INTR_MSG_DATA)) != 0U)
+	/* NETC Transmit interrupt */
+	if ((pendingIntr & (1U << NETC0_TX_INTR_MSG_DATA)) != 0U)
 	{
-		EP_CleanTxIntrFlags(&g_ep_handle, 1, 0);
+		EP_CleanTxIntrFlags(&g_xether_board.ep_handle[XETHER_NETC_EP0], 1, 0);
 	}
 
-	/* NETC0 Receive interrupt */
-	if ((pendingIntr & (1U << EXAMPLE_RX_INTR_MSG_DATA)) != 0U)
+	/* NETC Receive interrupt */
+	if ((pendingIntr & (1U << NETC0_RX_INTR_MSG_DATA)) != 0U)
 	{
-		EP_CleanRxIntrFlags(&g_ep_handle, 1);
+		EP_CleanRxIntrFlags(&g_xether_board.ep_handle[XETHER_NETC_EP0], 1);
 	}
 }
 
-static status_t xether_netc0_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
+static status_t xether_netc_ep0_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
 {
 	return (kStatus_Success);
 }
-
-static status_t xether_netc1_reclaim_callback(ep_handle_t *handle, uint8_t ring, netc_tx_frame_info_t *frameInfo, void *userData)
-{
-	return (kStatus_Success);
-}
-
 
 static bool_t xether_netc_init(ep_handle_t *handle, uint8_t *mac_addr, const ep_config_t *ep_config, const netc_bdr_config_t *bdr_config)
 {
@@ -427,15 +383,10 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
 	status_t result                  = kStatus_Success;
 
-	if (   (mac_addr != NULL)
-		&& (ep_config != NULL)
-		&& (bdr_config != NULL)
-	) {
+	if (config != NULL) {
 		netc_rx_bdr_config_t	rxBdrConfig = {0};
 		netc_tx_bdr_config_t	txBdrConfig = {0};
 		netc_bdr_config_t		bdrConfig = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
-		netc_buffer_struct_t	txBuff = {.buffer = &g_txFrame, .length = sizeof(g_txFrame)};
-		netc_frame_struct_t		txFrame = {.buffArray = &txBuff, .length = 1};
 		bool_t					link = false;
 		netc_msix_entry_t		msix_entry[XETHER_NETC_MSIX_ENTRYID_MAX];
 		netc_hw_mii_mode_t		phy_mode;
@@ -446,7 +397,7 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		uint32_t				length;
 
 		/* MSIX and interrupt configuration. */
-		MSGINTR_Init(XETHER_NETC0_MSGINTR, &xether_msgintr_callback);
+		MSGINTR_Init(XETHER_NETC_EP0_MSGINTR, &xether_netc_ep0_msgintr_callback);
 		msg_addr = MSGINTR_GetIntrSelectAddr(XETHER_NETC0_MSGINTR, 0);
 
 		msix_entry[XETHER_NETC_MSIX_ENTRYID_RX].control = kNETC_MsixIntrMaskBit;
@@ -458,20 +409,20 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		msix_entry[XETHER_NETC_MSIX_ENTRYID_TX].msgData = NETC0_TX_INTR_MSG_DATA;
 
 		/* BD ring configuration. */
-		bdrConfig.rxBdrConfig[0].bdArray       = &g_xether_netc0_rxbuff_desc[0][0];
-		bdrConfig.rxBdrConfig[0].len           = NETC0_RXBD_NUM;
+		bdrConfig.rxBdrConfig[0].bdArray       = &g_xether_netc0_rxbuff_descriptor[0][0];
+		bdrConfig.rxBdrConfig[0].len           = NETC_EP0_RXBD_NUM;
 		bdrConfig.rxBdrConfig[0].buffAddrArray = &g_xether_netc0_rxbuff_addr_array[0][0];
-		bdrConfig.rxBdrConfig[0].buffSize      = NETC0_RXBUFF_SIZE_ALIGN;
-		bdrConfig.rxBdrConfig[0].msixEntryIdx  = NETC0_RX_MSIX_ENTRY_IDX;
+		bdrConfig.rxBdrConfig[0].buffSize      = NETC_EP0_RXBUFF_SIZE_ALIGN;
+		bdrConfig.rxBdrConfig[0].msixEntryIdx  = NETC_EP0_RX_MSIX_ENTRY_IDX;
 		bdrConfig.rxBdrConfig[0].extendDescEn  = false;
 		bdrConfig.rxBdrConfig[0].enThresIntr   = true;
 		bdrConfig.rxBdrConfig[0].enCoalIntr    = true;
 		bdrConfig.rxBdrConfig[0].intrThreshold = 1;
 
-		bdrConfig.txBdrConfig[0].bdArray      = &g_xether_netc0_txbuff_desc[0][0];
-		bdrConfig.txBdrConfig[0].len          = NETC0_TXBD_NUM;
+		bdrConfig.txBdrConfig[0].bdArray      = &g_xether_netc0_txbuff_descriptor[0][0];
+		bdrConfig.txBdrConfig[0].len          = NETC_EP0_TXBD_NUM;
 		bdrConfig.txBdrConfig[0].dirtyArray   = &g_xether_netc0_txdirty[0][0];
-		bdrConfig.txBdrConfig[0].msixEntryIdx = NETC0_TX_MSIX_ENTRY_IDX;
+		bdrConfig.txBdrConfig[0].msixEntryIdx = NETC_EP0_TX_MSIX_ENTRY_IDX;
 		bdrConfig.txBdrConfig[0].enIntr       = true;
 
 		/* Wait PHY link up. */
@@ -490,12 +441,12 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 
 		/* Endpoint configuration. */
 		EP_GetDefaultConfig(&ep_config);
-		ep_config.si                    = g_siIndex[index];
+		ep_config.si                    = kNETC_ENETC0PSI0;
 		ep_config.siConfig.txRingUse    = 1;
 		ep_config.siConfig.rxRingUse    = 1;
 		ep_config.reclaimCallback       = xether_netc0_reclaim_callback;
 		ep_config.userData				=
-		ep_config.msixEntry             = &msixEntry[0];
+		ep_config.msixEntry             = &msix_entry[0];
 		ep_config.entryNum              = 2;
 		ep_config.port.ethMac.miiMode   = phyMode;
 		ep_config.port.ethMac.miiSpeed  = phySpeed;
@@ -510,11 +461,11 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		assert(!((phyMode == kNETC_MiiMode) && (phyDuplex == kNETC_MiiHalfDuplex)));
 		#endif
 
-		result = EP_Init(&g_ep_handle, &g_macAddr[0], &ep_config, &bdrConfig);
+		result = EP_Init(&g_xether_board.ep_handle[XETHER_NETC_EP0], &g_macAddr[0], &ep_config, &bdrConfig);
 
 		/* Unmask MSIX message interrupt. */
-		EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_TX_MSIX_ENTRY_IDX, false);
-		EP_MsixSetEntryMask(&g_ep_handle, EXAMPLE_RX_MSIX_ENTRY_IDX, false);
+		EP_MsixSetEntryMask(&g_ep_handle, XETHER_NETC_MSIX_ENTRYID_TX, false);
+		EP_MsixSetEntryMask(&g_ep_handle, XETHER_NETC_MSIX_ENTRYID_RX, false);
 
 	}
 
