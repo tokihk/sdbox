@@ -543,7 +543,7 @@ static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 	/* Send frame. */
 	do
 	{
-		result = ENET_SendFrame(ENET_1G, &g_xether_enet1g.enet_handle, pucBuffer, p->tot_len, 0, false, NULL);
+		result = EP_SendFrame(&g_xether_board.ep_handle[XETHER_NETC_EP0], 0, p->tot_len, 0, false, NULL);
 	}
 	while (result == kStatus_ENET_TxFrameBusy);
 
