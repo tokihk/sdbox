@@ -43,6 +43,8 @@
 #define NETC_EP_TXBUFF_SIZE				1522U
 #define NETC_EP_TXBUFF_SIZE_ALIGN		SDK_SIZEALIGN(NETC_EP_TXBUFF_SIZE, NETC_EP_BUFF_SIZE_ALIGN)
 
+#define NETC_EP0_PORT_ID				XETHER_NETC_PORT_ETH4
+
 #define NETC_EP0_RXRING_NUM				3U
 #define NETC_EP0_RXBD_NUM				8U
 
@@ -96,22 +98,26 @@ typedef struct xether_netc_config
 	netc_hw_si_idx_t			hw_si_id;
 } xether_netc_config_t;
 
-typedef struct xether_ep_status
+typedef struct xether_netc_port_status
 {
 	phy_speed_t					last_speed;
 	phy_duplex_t				last_duplex;
 	bool_t						last_link_up;
-} xether_ep_status_t;
+} xether_netc_port_status_t;
 
-typedef struct xether_netc_port_handle
+typedef struct xether_netc_port_object
 {
+	ep_handle_t *				ep_handle;
+
 	phy_handle_t				phy_handle;
 	phy_rtl8211f_resource_t		phy_resource;
 
 	netc_hw_si_idx_t			hw_si_id;
 
-	xether_ep_status_t			status;
-} xether_netc_port_handle_t;
+	netc_hw_mii_mode_t			mii_mode;
+
+	xether_netc_port_status_t	status;
+} xether_netc_port_object_t;
 
 static struct
 {
@@ -119,14 +125,9 @@ static struct
 
 	netc_mdio_handle_t			emdio_handle;
 
-	phy_rtl8211f_resource_t		phy_resource[XETHER_NETC_PORT_MAX];
-	phy_handle_t				phy_handle[XETHER_NETC_PORT_MAX];
+	xether_netc_port_object_t	port_object[XETHER_NETC_PORT_MAX];
 
 	uint32_t					txFlag;
-
-	phy_speed_t					last_speed;
-	phy_duplex_t				last_duplex;
-	bool_t						last_link_up;
 } g_xether_board;
 
 
@@ -228,28 +229,72 @@ static status_t xether_netc_phy_setup_rtl8201(phy_handle_t *handle)
 	return (result);
 }
 
-static status_t xether_netc_phy_init(uint32_t port, phy_config_t *phy_config)
+static status_t xether_netc_phy_init(xether_netc_port_object_t *pobj, phy_config_t *phy_config)
 {
-    if (port >= XCOUNTOF(g_xether_board.phy_resource))
-    {
-    	return (kStatus_OutOfRange);
-    }
+	pobj->phy_resource.write = xether_netc_phy_mdio_write;
+	pobj->phy_resource.read  = xether_netc_phy_mdio_read;
 
-	g_xether_board.phy_resource[port].write = xether_netc_phy_mdio_write;
-	g_xether_board.phy_resource[port].read  = xether_netc_phy_mdio_read;
-
-	return (PHY_Init(&g_xether_board.phy_handle[port], phy_config));
+	return (PHY_Init(&pobj->phy_handle, phy_config));
 }
 
-status_t xether_netc_phy_link_status_get(uint32_t port, bool *link)
+static status_t xether_netc_phy_config_get(uint32_t port, netc_hw_mii_mode_t *mode, netc_hw_mii_speed_t *speed, netc_hw_mii_duplex_t *duplex)
 {
-	return (PHY_GetLinkStatus(&g_xether_board.phy_handle[port], link));
+	status_t ret = kStatus_OutOfRange;
+
+	if (port < XCOUNTOF(g_xether_board.phy_handle))
+	{
+		switch (port)
+		{
+			case XETHER_NETC_PORT_ETH4:		*mode = kNETC_RmiiMode;			break;
+			case XETHER_NETC_PORT_ETH0:		*mode = kNETC_RmiiMode;			break;
+			case XETHER_NETC_PORT_ETH1:		*mode = kNETC_RgmiiMode;		break;
+			case XETHER_NETC_PORT_ETH2:		*mode = kNETC_RgmiiMode;		break;
+			case XETHER_NETC_PORT_ETH3:		*mode = kNETC_RgmiiMode;		break;
+			default:														break;
+		}
+
+		ret = PHY_GetLinkSpeedDuplex(&g_xether_board.phy_handle[port], (phy_speed_t *)speed, (phy_duplex_t *)duplex);
+	}
+
+	return (ret);
 }
 
+static bool_t xether_netc_port_link_status_update(xether_netc_port_object_t *pobj)
+{
+	bool_t link_up_raw = FALSE;
+
+	if (PHY_GetLinkStatus(&pobj->phy_handle, &link_up_raw) == kStatus_Success)
+	{
+		if (pobj->status.last_link_up != link_up_raw)
+		{
+			pobj->status.last_link_up = link_up_raw;
+
+			if (pobj->status.last_link_up)
+			{
+				phy_speed_t		speed;
+				phy_duplex_t	duplex;
+
+				if (PHY_GetLinkSpeedDuplex(&pobj->phy_handle, &speed, &duplex) == kStatus_Success)
+				{
+					if (   (pobj->status.last_speed != speed)
+						|| (pobj->status.last_duplex != duplex)
+					) {
+						pobj->status.last_speed  = speed;
+						pobj->status.last_duplex = duplex;
+					}
+				}
+			}
+		}
+	}
+
+	return (pobj->status.last_link_up);
+}
 
 static status_t xether_netc_port_init(void)
 {
-    status_t result = kStatus_Success;
+    status_t						result = kStatus_Success;
+    uint8_t							port_id;
+    xether_netc_port_object_t *		pobj;
 
     phy_config_t phy8211Config = {
         .autoNeg   = false,
@@ -265,6 +310,13 @@ static status_t xether_netc_port_init(void)
         .enableEEE = false,
         .ops       = &phyrtl8201_ops,
     };
+
+    /* PHYステータスを初期化 */
+    for (port_id = 0; port_id < XCOUNTOF(g_xether_board.port_object); port_id++)
+    {
+    	pobj = g_xether_board.port_object[port_id];
+    	pobj->status.last_link_up = FALSE;
+    }
 
     /* Reset all PHYs even some are not used in case unstable status has effect on other PHYs. */
     /* Reset PHY8201 for ETH4(EP), ETH0(Switch port0). Power on 150ms, reset 10ms, wait 150ms. */
@@ -286,59 +338,64 @@ static status_t xether_netc_port_init(void)
     SDK_DelayAtLeastUs(150000, CLOCK_GetFreq(kCLOCK_CpuClk));
 
     /* Initialize PHY for EP. */
-    phy8201Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH4];
+	pobj = &g_xether_board.port_object[XETHER_NETC_PORT_ETH4];
+    phy8201Config.resource = &pobj->phy_resource;
     phy8201Config.phyAddr  = BOARD_EP0_PHY_ADDR;
 
-    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH4, &phy8201Config);
+    result = xether_netc_phy_init(pobj, &phy8201Config);
     if (result != kStatus_Success)
     {
         return result;
     }
 
-    result = xether_netc_phy_setup_rtl8201(&g_xether_board.phy_handle[XETHER_NETC_PORT_ETH4]);
+    result = xether_netc_phy_setup_rtl8201(&pobj->phy_handle);
     if (result != kStatus_Success)
     {
         return result;
     }
 
     /* Initialize PHY for switch port0. */
-    phy8201Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH0];
+	pobj = &g_xether_board.port_object[XETHER_NETC_PORT_ETH0];
+    phy8201Config.resource = &pobj->phy_resource;
     phy8201Config.phyAddr  = BOARD_SWT_PORT0_PHY_ADDR;
 
-    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH0, &phy8201Config);
+    result = xether_netc_phy_init(pobj, &phy8201Config);
     if (result != kStatus_Success)
     {
         return result;
     }
 
-    result = xether_netc_phy_setup_rtl8201(&g_xether_board.phy_handle[XETHER_NETC_PORT_ETH0]);
+    result = xether_netc_phy_setup_rtl8201(&pobj->phy_handle);
     if (result != kStatus_Success)
     {
         return result;
     }
 
     /* Initialize PHY for switch port1. */
-    phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH1];
+	pobj = &g_xether_board.port_object[XETHER_NETC_PORT_ETH1];
+    phy8211Config.resource = &pobj->phy_resource;
     phy8211Config.phyAddr  = BOARD_SWT_PORT1_PHY_ADDR;
 
-    result = xether_netc_phy_init(XETHER_NETC_PORT_ETH1, &phy8211Config);
+    result = xether_netc_phy_init(pobj, &phy8211Config);
     if (result != kStatus_Success)
     {
         return result;
     }
 
 	/* Initialize PHY for switch port2. */
-	phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH2];
+	pobj = &g_xether_board.port_object[XETHER_NETC_PORT_ETH2];
+	phy8211Config.resource = &pobj->phy_resource;
 	phy8211Config.phyAddr  = BOARD_SWT_PORT2_PHY_ADDR;
 
-	result = xether_netc_phy_init(XETHER_NETC_PORT_ETH2, &phy8211Config);
+	result = xether_netc_phy_init(pobj, &phy8211Config);
 	if (result != kStatus_Success)
 	{
 		return result;
 	}
 
 	/* Initialize PHY for switch port3. */
-	phy8211Config.resource = &g_xether_board.phy_resource[XETHER_NETC_PORT_ETH3];
+	pobj = &g_xether_board.port_object[XETHER_NETC_PORT_ETH3];
+	phy8211Config.resource = &pobj->phy_resource;
 	phy8211Config.phyAddr  = BOARD_SWT_PORT3_PHY_ADDR;
 
 	result = xether_netc_phy_init(XETHER_NETC_PORT_ETH3, &phy8211Config);
@@ -389,6 +446,8 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		netc_bdr_config_t		bdrConfig = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
 		bool_t					link = false;
 		netc_msix_entry_t		msix_entry[XETHER_NETC_MSIX_ENTRYID_MAX];
+		ep_handle_t *			ep_handle = &g_xether_board.ep_handle[XETHER_NETC_EP0];
+
 		netc_hw_mii_mode_t		phy_mode;
 		netc_hw_mii_speed_t		phy_speed;
 		netc_hw_mii_duplex_t	phy_duplex;
@@ -428,9 +487,10 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		/* Wait PHY link up. */
 		do
 		{
-			result = APP_PHY_GetLinkStatus(index, &link);
+			result = xether_netc_phy_link_status_get(NETC_EP0_PORT_ID, &link);
 		} while ((result != kStatus_Success) || (!link));
-		result = APP_PHY_GetLinkModeSpeedDuplex(index, &phyMode, &phySpeed, &phyDuplex);
+
+		result = xether_netc_phy_config_get(NETC_EP0_PORT_ID, &phy_mode, &phy_speed, &phy_duplex);
 		if (result != kStatus_Success)
 		{
 			return result;
@@ -444,13 +504,13 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		ep_config.si                    = kNETC_ENETC0PSI0;
 		ep_config.siConfig.txRingUse    = 1;
 		ep_config.siConfig.rxRingUse    = 1;
-		ep_config.reclaimCallback       = xether_netc0_reclaim_callback;
+		ep_config.reclaimCallback       = xether_netc_ep0_reclaim_callback;
 		ep_config.userData				=
 		ep_config.msixEntry             = &msix_entry[0];
 		ep_config.entryNum              = 2;
-		ep_config.port.ethMac.miiMode   = phyMode;
-		ep_config.port.ethMac.miiSpeed  = phySpeed;
-		ep_config.port.ethMac.miiDuplex = phyDuplex;
+		ep_config.port.ethMac.miiMode   = phy_mode;
+		ep_config.port.ethMac.miiSpeed  = phy_speed;
+		ep_config.port.ethMac.miiDuplex = phy_duplex;
 
 		#if (defined(FSL_FEATURE_NETC_HAS_ERRATA_052167) && FSL_FEATURE_NETC_HAS_ERRATA_052167)
 		/* ERR052167: Actual MAC Tx IPG is longer than configured when transmitting back-to-back packets in MII half duplex
@@ -458,14 +518,14 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		approximately 27. The net result is that maximum throughput will be reduced also in the absence of half-duplex
 		collision/retry events. When using MII protocol, using full-duplex mode is recommended instead of half-duplex. If
 		using MII half-duplex mode, additional bandwidth loss should be expected and accounted for due to extended IPG. */
-		assert(!((phyMode == kNETC_MiiMode) && (phyDuplex == kNETC_MiiHalfDuplex)));
+		assert(!((phy_mode == kNETC_MiiMode) && (phy_duplex == kNETC_MiiHalfDuplex)));
 		#endif
 
-		result = EP_Init(&g_xether_board.ep_handle[XETHER_NETC_EP0], &g_macAddr[0], &ep_config, &bdrConfig);
+		result = EP_Init(ep_handle, &config->mac_addr.addr[0], &ep_config, &bdrConfig);
 
 		/* Unmask MSIX message interrupt. */
-		EP_MsixSetEntryMask(&g_ep_handle, XETHER_NETC_MSIX_ENTRYID_TX, false);
-		EP_MsixSetEntryMask(&g_ep_handle, XETHER_NETC_MSIX_ENTRYID_RX, false);
+		EP_MsixSetEntryMask(ep_handle, XETHER_NETC_MSIX_ENTRYID_TX, false);
+		EP_MsixSetEntryMask(ep_handle, XETHER_NETC_MSIX_ENTRYID_RX, false);
 
 	}
 
@@ -552,32 +612,7 @@ static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 
 static bool_t xether_netc_ep0_link_status_update(void)
 {
-	bool	link_status_raw;
-
-	if (PHY_GetLinkStatus(&g_xether_enet1g.phy_handle, &link_status_raw) == kStatus_Success)
-	{
-		if (g_xether_enet1g.last_link_up != (bool_t)link_status_raw)
-		{
-			status_t		st;
-			phy_speed_t		speed;
-			phy_duplex_t	duplex;
-
-			g_xether_enet1g.last_link_up = (bool_t)link_status_raw;
-
-			st = PHY_GetLinkSpeedDuplex(&g_xether_enet1g.phy_handle, &speed, &duplex);
-			if (st == kStatus_Success)
-			{
-				if ((g_xether_enet1g.last_speed != speed) || (g_xether_enet1g.last_duplex != duplex))
-				{
-					ENET_SetMII(ENET_1G, (enet_mii_speed_t)speed, (enet_mii_duplex_t)duplex);
-					g_xether_enet1g.last_speed  = speed;
-					g_xether_enet1g.last_duplex = duplex;
-				}
-			}
-		}
-	}
-
-	return (g_xether_enet1g.last_link_up);
+	return (xether_netc_port_link_status_update(&g_xether_board.port_object[NETC_EP0_PORT_ID]));
 }
 
 static inline void xether_init_board(void)
@@ -619,6 +654,8 @@ static inline void xether_init_board(void)
     while (!NETC_IERBIsLockOver())
     {
     }
+
+    xether_netc_port_init();
 
 }
 
