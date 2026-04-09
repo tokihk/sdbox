@@ -80,12 +80,12 @@ typedef enum xether_netc_msix_entry_id
 	XETHER_NETC_MSIX_ENTRYID_MAX,
 } xether_netc_msix_entry_id_t;
 
-typedef struct xether_rx_pbuf_wrapper
+typedef struct xether_rx_pbuf
 {
 	struct pbuf_custom			p;				/*!< Pbuf wrapper. Has to be first. */
 	void *						buffer;			/*!< Original buffer wrapped by p. */
 	volatile bool_t				buffer_used;	/*!< Wrapped buffer is used by ENET or lwIP. */
-} xether_rx_pbuf_wrapper_t;
+} xether_rx_pbuf_t;
 
 typedef struct xether_device_status
 {
@@ -121,8 +121,6 @@ typedef struct xether_netc_port_object
 
 static struct
 {
-	ep_handle_t					ep_handle[XETHER_NETC_EP_MAX];
-
 	netc_mdio_handle_t			emdio_handle;
 
 	xether_netc_port_object_t	port_object[XETHER_NETC_PORT_MAX];
@@ -149,6 +147,79 @@ static netc_tx_frame_info_t									g_xether_netc0_mgmt_txdirty[NETC_EP_TXBD_NUM
 static netc_tx_frame_info_t									g_xether_netc0_mgmt_txframe_info;
 
 static netc_tx_frame_info_t									g_xether_netc0_tx_dirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
+
+
+static struct pbuf *xether_netc_rx_frame_to_pbufs(struct ethernetif *ethernetif, netc_frame_struct_t *frame)
+{
+    struct pbuf *p_root = NULL;
+    struct pbuf *p      = NULL;
+    int i               = 0;
+    int buf_n;
+
+    for (buf_n = 0; buf_n < frame->length; buf_n++)
+    {
+        netc_buffer_struct_t *bs    = &frame->buffArray[buf_n];
+        rx_pbuf_wrapper_t *pw_found = NULL;
+        int n                       = 0;
+        void *buffer                = bs->buffer;
+        uint16_t length             = bs->length;
+
+#if defined(FSL_FEATURE_NETC_HAS_SWITCH_TAG) && FSL_FEATURE_NETC_HAS_SWITCH_TAG
+        if ((buf_n == 0) && NETC_EnetcHasManagement(ethernetif->ep_handle->hw.base) &&
+            (getSiNum(ethernetif->ep_handle->cfg.si) == 0U)) {
+            size_t tagSize = sizeof(netc_swt_tag_host_t);
+
+            /* Drop switch tag after DMA/SMAC field */
+            for (int i = 0; i < length - 12 - tagSize; i++)
+                ((char *)buffer)[12 + i] = ((char *)buffer)[12 + tagSize + i];
+
+            length = length - tagSize;
+        }
+#endif
+
+        // seek pbuf
+        while ((n < NETC_RXBUFF_NUM) && (pw_found == NULL))
+        {
+            if (ethernetif->rxPbufs[i].buffer == buffer)
+            {
+                pw_found = &ethernetif->rxPbufs[i];
+
+                p = pbuf_alloced_custom(PBUF_RAW, length, PBUF_REF, &pw_found->p, buffer, NETC_RXBUFF_SIZE);
+                LWIP_ASSERT("pbuf_alloced_custom() failed", p);
+
+                if (p_root == NULL)
+                {
+                    p_root = p;
+                }
+                else
+                {
+                    pbuf_cat(p_root, p);
+                }
+            }
+
+            n++;
+            i++;
+            i %= NETC_RXBUFF_NUM; // wrap
+        }
+
+        LWIP_ASSERT("Rx buffer not found in pbuf array", pw_found != NULL);
+    }
+
+    MIB2_STATS_NETIF_ADD(netif, ifinoctets, p->tot_len);
+    if (((u8_t *)p->payload)[0] & 1)
+    {
+        /* broadcast or multicast packet */
+        MIB2_STATS_NETIF_INC(netif, ifinnucastpkts);
+    }
+    else
+    {
+        /* unicast packet */
+        MIB2_STATS_NETIF_INC(netif, ifinucastpkts);
+    }
+
+    LINK_STATS_INC(link.recv);
+    return p;
+}
 
 
 static inline void xether_netc_ep0_phy_reset_pin_set(bool_t reset)
@@ -535,45 +606,35 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 
 static void xether_netc_ep0_close(void)
 {
-	xether_netc_ep_deinit(0);
+	EP_Deinit(&g_xether_board.ep_handle[XETHER_NETC_EP0]);
 }
 
 static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 {
-	enet_buffer_struct_t	buffers[ENET1G_MAX_BUFFERS_PER_FRAME];
-	enet_rx_frame_struct_t	rxFrame = {.rxBuffArray = &buffers[0] };
-	struct pbuf *			p = NULL;
-	status_t status;
+    struct ethernetif *ethernetif = netif->state;
+    struct pbuf *p                = NULL;
 
-	/* Read frame. */
-//	status = ENET_GetRxFrame_Custom(ENET_1G, &g_xether_enet1g.handle, &rxFrame, 0);
-	status = ENET_GetRxFrame(ENET_1G, &g_xether_enet1g.enet_handle, &rxFrame, 0);
+    netc_buffer_struct_t buffers[MAX_BUFFERS_PER_FRAME];
+    netc_frame_struct_t frame = {.length = (MAX_BUFFERS_PER_FRAME), .buffArray = buffers};
 
-	switch (status)
-	{
-		case kStatus_Success:
-			/* Frame read, process it into pbufs. */
-			p = xether_enet1g_rx_frame_to_pbufs(&rxFrame);
-			break;
+#if NETC_USE_SWT
+    status_t result = SWT_ReceiveFrame(ethernetif->swt_handle, &frame, NULL);
+#else
+    status_t result = EP_ReceiveFrame(ethernetif->ep_handle, 0 /*ring*/, &frame, NULL);
+#endif
 
-		case kStatus_ENET_RxFrameEmpty:
-			/* Frame not available. */
-			break;
+    if (result == kStatus_Success)
+    {
+        /* Frame read, process it into pbufs. */
+        p = ethernetif_rx_frame_to_pbufs(ethernetif, &frame);
+    }
+    else
+    {
+        // TODO
+    }
 
-		case kStatus_ENET_RxFrameError:
-			/* Error receiving frame */
-			break;
+    return p;
 
-		case kStatus_ENET_RxFrameDrop:
-			/* Frame received, but it had to be dropped
-			 * because new buffer(s) allocation failed in the ENET driver. */
-			break;
-
-		default:
-			break;
-	}
-
-	return (p);
 }
 
 static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
