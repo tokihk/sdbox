@@ -45,7 +45,7 @@
 
 #define NETC_EP0_PORT_ID				XETHER_NETC_PORT_ETH4
 
-#define NETC_EP0_RXRING_NUM				3U
+#define NETC_EP0_RXRING_NUM				32U
 #define NETC_EP0_RXBD_NUM				8U
 
 #define NETC_EP0_TXRING_NUM				3U
@@ -132,7 +132,7 @@ static struct
 typedef uint8_t												netc_ep_rx_buffer_t[NETC_EP_RXBUFF_SIZE_ALIGN];
 typedef uint8_t												netc_ep_tx_buffer_t[NETC_EP_TXBUFF_SIZE_ALIGN];
 
-AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_xether_netc0_rxbuff_descriptor[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bd_t			g_xether_netc0_rxbd_ring[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BD_ALIGN);
 AT_NONCACHEABLE_SECTION_ALIGN(static netc_ep_rx_buffer_t	g_xether_netc0_rxdata_buff[NETC_EP_RXRING_NUM][NETC_EP_RXBD_NUM], NETC_EP_BUFF_SIZE_ALIGN);
 AT_NONCACHEABLE_SECTION_ALIGN(static uint8_t				g_xether_netc0_rxframe[NETC_EP_RXBUFF_SIZE_ALIGN], NETC_EP_BUFF_SIZE_ALIGN);
 
@@ -147,6 +147,12 @@ static netc_tx_frame_info_t									g_xether_netc0_mgmt_txdirty[NETC_EP_TXBD_NUM
 static netc_tx_frame_info_t									g_xether_netc0_mgmt_txframe_info;
 
 static netc_tx_frame_info_t									g_xether_netc0_tx_dirty[NETC_EP_TXRING_NUM][NETC_EP_TXBD_NUM];
+
+
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_rx_bdr_t s_rxBdRing[NETC_RX_BD_NUM], 128);
+SDK_ALIGN(static uint8_t s_rxBuffers[NETC_RX_BD_NUM][NETC_RX_BUFFER_SIZE], 64);
+
+AT_NONCACHEABLE_SECTION_ALIGN(static netc_tx_bdr_t s_txBdRing[16], 128);
 
 
 static struct pbuf *xether_netc_rx_frame_to_pbufs(struct ethernetif *ethernetif, netc_frame_struct_t *frame)
@@ -512,6 +518,37 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 	status_t result                  = kStatus_Success;
 
 	if (config != NULL) {
+
+	    ep_config_t    cfg;
+	    netc_rx_bdr_t *rxBd;
+	    uint16_t       rxBdNum;
+	    uintptr_t      rxBufBase;
+	    uint16_t       rxBufSize;
+
+	    EP_GetDefaultConfig(&cfg);
+	    cfg.si = kNETC_ENETC0PSI0;
+
+	    /* RX BD/バッファは netc_rx_zc から借りる */
+	    cfg.rxBdrConfig[0].bdArray      = g_xether_netc0_rxbd_ring;
+	    cfg.rxBdrConfig[0].len          = NETC_RX_BD_NUM;
+	    cfg.rxBdrConfig[0].bufferSize   = NETC_RX_BUFFER_SIZE;
+	    cfg.rxBdrConfig[0].buffer       = (uintptr_t)&s_rxBuffers[0][0];
+	    cfg.rxBdrConfig[0].extendDescEn = false;
+	    cfg.rxBdrConfig[0].msixEntryIdx = 0;
+
+	    cfg.txBdrConfig[0].bdArray      = s_txBdRing;
+	    cfg.txBdrConfig[0].len          = 16;
+	    cfg.txBdrConfig[0].msixEntryIdx = 1;
+
+	    cfg.rxRingUse = 1U;
+	    cfg.txRingUse = 1U;
+
+	    /* 受信割り込みは使わない: コールバック登録もしない */
+	    cfg.rxCallback = NULL;
+
+	    (void)EP_Init(&s_ep, macAddr, &cfg, &g_ep_bdrinit);
+
+#if 0
 		netc_rx_bdr_config_t	rxBdrConfig = {0};
 		netc_tx_bdr_config_t	txBdrConfig = {0};
 		netc_bdr_config_t		bdrConfig = {.rxBdrConfig = &rxBdrConfig, .txBdrConfig = &txBdrConfig};
@@ -598,6 +635,7 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 		EP_MsixSetEntryMask(ep_handle, XETHER_NETC_MSIX_ENTRYID_TX, false);
 		EP_MsixSetEntryMask(ep_handle, XETHER_NETC_MSIX_ENTRYID_RX, false);
 
+#endif
 	}
 
 
