@@ -35,7 +35,7 @@ struct xether_device_info
  * Import board module
  * ------------------------------------------- */
 #if XBOARD_ETHERNET_ENABLE
-  #include "driver/xethernet_board.h"
+  #include <driver/xethernet_board.h>
 
   #define XBOARD_ETHERNET_NUM	(XCOUNTOF(XETHERNET_DEVICE_LIST))
 
