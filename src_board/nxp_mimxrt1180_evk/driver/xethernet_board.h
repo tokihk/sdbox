@@ -9,6 +9,9 @@
 #define XETHERNET_BOARD_H_
 
 
+/** -------------------------------------------------------
+	@brief MIMXRT1180-EVKのETH4を利用するために必要なGPIOとPHYを初期化する
+-------------------------------------------------------- */
 static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
 	return (TRUE);
@@ -23,6 +26,10 @@ static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 	return (NULL);
 }
 
+/** -------------------------------------------------------
+	@brief MIMXRT1180-EVKのETH4からパケットを送信する
+	@retval	TRUE	送信成功
+-------------------------------------------------------- */
 static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 {
 	return (TRUE);
@@ -33,10 +40,16 @@ static bool_t xether_netc_ep0_link_status_update(void)
 	return (FALSE);
 }
 
+/** -------------------------------------------------------
+	@brief MIMXRT1180-EVKのETH0～ETH4を利用するために必要なGPIOとPHYを初期化する
+-------------------------------------------------------- */
 static inline void xether_init_board(void)
 {
 }
 
+/** -------------------------------------------------------
+	@brief MIMXRT1180-EVKのETH0～ETH4に関するGPIOとPHYを安全に停止するための処理
+-------------------------------------------------------- */
 static inline void xether_deinit_board(void)
 {
 }
