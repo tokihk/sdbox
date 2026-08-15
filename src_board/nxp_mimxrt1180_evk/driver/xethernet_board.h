@@ -9,15 +9,23 @@
 #define XETHERNET_BOARD_H_
 
 
-#include "fsl_common.h"
-#include "fsl_gpio.h"
-#include "fsl_iomuxc.h"
-#include "fsl_netc_endpoint.h"
-#include "fsl_netc_mdio.h"
-
-#include "board.h"
+#include "fsl_netc_endpoint.h"      /* netc_ep_handle_t, NETC_EnetcInit()  */
+#include "fsl_netc_switch.h"        /* netc_swt_handle_t, NETC_SwtInit()   */
+#include "fsl_netc_mdio.h"          /* NETC_MDIOInit(), NETC_MDIOWrite()   */
+#include "fsl_phyrtl8211f.h"        /* PHY_RTL8211F_Init() など            */
+#include "fsl_rgpio.h"               /* GPIO_PinWrite()                     */
+#include "fsl_iomuxc.h"             /* IOMUXC_SetPinMux()                  */
 #include "pin_mux.h"
 #include "clock_config.h"
+#include "board.h"
+
+/* lwIP */
+#include "lwip/pbuf.h"
+#include "lwip/mem.h"
+
+/* NXP SDK ヘッダ（ターゲット環境に合わせてパスを調整） */
+#include "fsl_netc_endpoint.h"      /* netc_ep_handle_t, NETC_EnetcXxx() */
+#include "fsl_netc.h"            /* netc_si_config_t                    */
 
 
 /* PHYのMDIOアドレス */
@@ -28,82 +36,471 @@
 /* TODO: 実際のNETC/MDIOのソースクロック周波数に合わせて確認すること */
 #define XETHER_EP0_MDIO_SRC_CLOCK_HZ			(200000000U)
 
-/* IEEE802.3 標準PHYレジスタ (RTL8201FIも準拠) */
-#define XETHER_PHY_REG_BCR						(0x00U)		/* Basic Control Register */
-#define XETHER_PHY_REG_BSR						(0x01U)		/* Basic Status Register */
-#define XETHER_PHY_REG_ANAR						(0x04U)		/* Auto-Negotiation Advertisement */
-#define XETHER_PHY_REG_ANLPAR					(0x05U)		/* Auto-Negotiation Link Partner Ability */
+/* ------------------------------------------------------------------ */
+/* MIMXRT1180-EVK Ethernet構成                                         */
+/*                                                                     */
+/*   ETH0 : NETC SWT PORT0  RTL8211FDI-CG  RGMII  PHY addr=0x01      */
+/*   ETH1 : NETC SWT PORT1  RTL8211FDI-CG  RGMII  PHY addr=0x02      */
+/*   ETH2 : NETC SWT PORT2  RTL8211FDI-CG  RGMII  PHY addr=0x03      */
+/*   ETH3 : NETC SWT PORT3  RTL8211FDI-CG  RGMII  PHY addr=0x04      */
+/*   ETH4 : NETC EP0/SI0    RTL8211FDI-CG  RGMII  PHY addr=0x05      */
+/*                                                                     */
+/*   MDIO : NETC EMDIO (全PHY共有)                                    */
+/*   PHY RESET: GPIO13_IO16 (アクティブLow, 全PHY共通)               */
+/* ------------------------------------------------------------------ */
 
-#define XETHER_PHY_BCR_RESET					(0x8000U)
-#define XETHER_PHY_BCR_AUTONEG_EN				(0x1000U)
-#define XETHER_PHY_BCR_POWER_DOWN				(0x0800U)
-#define XETHER_PHY_BCR_RESTART_AUTONEG			(0x0200U)
+/** PHY RESETピン（EVK回路図より） */
+#define XETHER_PHY_RESET_GPIO       GPIO13
+#define XETHER_PHY_RESET_PIN        (16U)
+#define XETHER_PHY_RESET_ASSERT     (0U)   /* Low = リセット中 */
+#define XETHER_PHY_RESET_DEASSERT   (1U)
 
-#define XETHER_PHY_BSR_AUTONEG_COMPLETE			(0x0020U)
-#define XETHER_PHY_BSR_LINK_STATUS				(0x0004U)
+/** PHY RESETパルス幅 / 安定待ちウェイト（RTL8211F データシート要件） */
+#define XETHER_PHY_RESET_HOLD_MS    (10U)
+#define XETHER_PHY_RESET_STABLE_MS  (30U)
 
-#define XETHER_PHY_ANAR_100_FULL				(0x0100U)
-#define XETHER_PHY_ANAR_100_HALF				(0x0080U)
-#define XETHER_PHY_ANAR_10_FULL					(0x0040U)
-#define XETHER_PHY_ANAR_10_HALF					(0x0020U)
-#define XETHER_PHY_ANAR_802_3					(0x0001U)
+/** PHYアドレス（MDIO） */
+#define XETHER_ETH0_PHY_ADDR    (0x01U)
+#define XETHER_ETH1_PHY_ADDR    (0x02U)
+#define XETHER_ETH2_PHY_ADDR    (0x03U)
+#define XETHER_ETH3_PHY_ADDR    (0x04U)
+#define XETHER_ETH4_PHY_ADDR    (0x05U)
 
-#define XETHER_PHY_RESET_TIMEOUT_COUNT			(1000U)
+/** RX BDリング深さ（2の冪、NETCハードウェア制約）*/
+#define NETC_HAL_RX_BD_NUM      (32U)
 
-/* 送受信リングの長さ、バッファサイズ */
-#define XETHER_EP0_RX_RING_LEN					(8U)
-#define XETHER_EP0_TX_RING_LEN					(8U)
-#define XETHER_EP0_RX_BUFF_SIZE					(1536U)
-#define XETHER_EP0_TX_MAX_SEGMENT				(8U)		/* pbufチェインの最大分割数 */
+/** TX BDリング深さ */
+#define NETC_HAL_TX_BD_NUM      (16U)
+
+/** Ethernetフレーム最大サイズ（VLAN対応） */
+#define NETC_HAL_MAX_FRAME_SIZE (1522U)
+
+/** RXゼロコピー用バッファ数（BDリング深さ以上必要） */
+#define NETC_HAL_RX_BUF_NUM     (NETC_HAL_RX_BD_NUM)
+
+/** バッファアライメント（NETC DMAは64バイトアライメント要求） */
+#define NETC_HAL_BUF_ALIGN      (64U)
 
 
-/* NETC/PHY/MDIOのハンドルとリソース(BD/バッファ)は非キャッシュ領域に配置する */
-static ep_handle_t							s_xether_ep0_handle;
-static netc_mdio_handle_t					s_xether_ep0_mdio_handle;
-static bool_t								s_xether_ep0_is_opened = FALSE;
+typedef struct netc_hal_ctx
+{
+	ep_handle_t *		ep;           /**< 外部注入済みENETCハンドル */
+	uint8_t				mac_addr[6];
+	uint8_t				si_idx;
 
-XSECTION_NONCACHE_DATA(static netc_rx_bd_t		s_xether_ep0_rx_bd[XETHER_EP0_RX_RING_LEN]);
-XSECTION_NONCACHE_DATA(static netc_tx_bd_t		s_xether_ep0_tx_bd[XETHER_EP0_TX_RING_LEN]);
-XSECTION_NONCACHE_DATA(static uint8_t			s_xether_ep0_rx_buff[XETHER_EP0_RX_RING_LEN][XETHER_EP0_RX_BUFF_SIZE]);
-static uint8_t								*s_xether_ep0_rx_buff_addr[XETHER_EP0_RX_RING_LEN];
+	/* TX 完了追跡：ゼロコピーTXでpbufポインタを保持する */
+	struct {
+		void *			pbuf;     /**< 対応するpbufポインタ（NULLなら空き）*/
+		bool			in_use;
+	} tx_pending[NETC_HAL_TX_BD_NUM];
 
-/* 受信フレームをpbufへコピーするための一時バッファ */
-static uint8_t								s_xether_ep0_rx_scratch[XETHER_EP0_RX_BUFF_SIZE];
+	uint32_t			tx_prod_idx; /**< TX生産インデックス（次にキューするBD）*/
+	uint32_t			tx_cons_idx; /**< TX消費インデックス（次にreclaimするBD）*/
+
+	uint32_t			rx_cons_idx; /**< RX消費インデックス */
+} netc_hal_ctx_t;
+
+/**
+ * @brief ゼロコピーRXバッファディスクリプタ
+ *
+ * lwIPドライバがこの構造体でDMAバッファのオーナーシップを受け取り、
+ * pbuf処理後に netc_hal_rx_release() で返却する。
+ */
+typedef struct
+{
+	uint8_t *			data;    /**< DMAバッファ先頭ポインタ（物理=仮想、RT1180はフラットメモリ）*/
+	uint16_t			length;  /**< 受信フレーム長（Ethernetヘッダ〜FCS直前）*/
+	uint32_t			bd_idx;  /**< BDリングインデックス（返却時に必要）*/
+} netc_hal_rx_frame_t;
+
+/**
+ * @brief ゼロコピーTXバッファディスクリプタ
+ *
+ * lwIPドライバがpbuf->payloadポインタをそのまま渡す。
+ * NETCがDMA完了後に netc_hal_tx_reclaim() でpbufを解放できる。
+ */
+typedef struct
+{
+	const uint8_t *		data;   /**< 送信データ先頭（pbuf->payload）*/
+	uint16_t			length; /**< 送信バイト数 */
+	void *				pbuf;   /**< 完了後に pbuf_free() するpbufポインタ */
+} netc_hal_tx_frame_t;
+
+/**
+ * @brief HAL初期化パラメータ
+ *
+ * ペリフェラル初期化済みのハンドル・アドレスを外部から注入する。
+ * NXP MCUXpresso SDK の ep_handle / si_handle を想定。
+ */
+typedef struct
+{
+	void *				ep_handle;     /**< netc_ep_handle_t* をキャストして渡す */
+	uint8_t				mac_addr[6];   /**< ステーションインタフェースのMACアドレス */
+	uint8_t				si_idx;        /**< ステーションインタフェース番号 (0-based) */
+} netc_hal_init_params_t;
 
 
 static struct
 {
 	bool_t						last_link_up;		/* 最新のリンクステータス */
+
+	uint8_t						si_idx;				/**< ステーションインタフェース番号（通常0）*/
+	uint32_t					phy_addr;			/**< MDIOアドレス（通常XETHER_ETH4_PHY_ADDR）*/
+
+	/* SDK ハンドル（アプリ層が所有し、HALに注入する） */
+	ep_handle_t					ep_handle;			/**< NETC ENETC EP0 ハンドル */
+	netc_hal_ctx_t *			hal_ctx;			/**< HALコンテキスト（netc_hal_init後に設定）*/
+
+	/* PHY ハンドル（RTL8211Fドライバ） */
+	phy_rtl8211f_resource_t		phy_resource;		/**< MDIOアクセスリソース */
+	phy_handle_t				phy_handle;			/**< PHYハンドル */
+
+	bool_t						opened;				/**< オープン済みフラグ */
+
 } g_xether_board;
 
+/** シングルインスタンス（RTOSなしの場合は静的確保で十分） */
+static struct netc_hal_ctx s_ctx;
 
-/** -------------------------------------------------------
-	@brief	RTL8201FI-VC-CGのレジスタをMDIO経由で読み出す
-	@param[in]	reg_addr	レジスタアドレス
-	@param[out]	data		読み出したデータの格納先
-	@return	読み出し結果
-	@retval	TRUE	成功
-	@retval	FALSE	失敗
--------------------------------------------------------- */
-static bool_t xether_ep0_phy_read(uint8_t reg_addr, uint16_t *data)
+/* ------------------------------------------------------------------ */
+/* 内部バッファ（DMA到達可能なセクションに配置：.noncacheable or MPU設定）*/
+/* ------------------------------------------------------------------ */
+
+/*
+ * RT1180 では OCRAM2 / FlexSPI SRAM が DMA 到達可能。
+ * リンカスクリプトで NonCacheable セクションを定義し、
+ * AT_NONCACHEABLE_SECTION マクロで配置する（MCUXpresso SDK流儀）。
+ */
+#ifndef AT_NONCACHEABLE_SECTION_ALIGN
+/* ターゲット外（ホストテストなど）のフォールバック定義 */
+#define AT_NONCACHEABLE_SECTION_ALIGN(var, align) \
+    __attribute__((aligned(align))) var
+#endif
+
+/** RX DMA バッファプール */
+AT_NONCACHEABLE_SECTION_ALIGN(
+    static uint8_t s_rx_bufs[NETC_HAL_RX_BUF_NUM][NETC_HAL_MAX_FRAME_SIZE],
+    NETC_HAL_BUF_ALIGN
+);
+
+/** TX BD リング用バッファ（SDKが要求するアライメント） */
+AT_NONCACHEABLE_SECTION_ALIGN(
+    static netc_tx_bd_t s_tx_bds[NETC_HAL_TX_BD_NUM],
+    NETC_HAL_BUF_ALIGN
+);
+
+/** RX BD リング用バッファ */
+AT_NONCACHEABLE_SECTION_ALIGN(
+    static netc_rx_bd_t s_rx_bds[NETC_HAL_RX_BD_NUM],
+    NETC_HAL_BUF_ALIGN
+);
+
+
+static inline uint32_t tx_ring_next(uint32_t idx)
 {
-	return ((NETC_MDIORead(&s_xether_ep0_mdio_handle, XETHER_EP0_PHY_ADDR, reg_addr, data) == kStatus_Success) ? TRUE : FALSE);
+    return (idx + 1U) % NETC_HAL_TX_BD_NUM;
 }
 
-
-/** -------------------------------------------------------
-	@brief	RTL8201FI-VC-CGのレジスタをMDIO経由で書き込む
-	@param[in]	reg_addr	レジスタアドレス
-	@param[in]	data		書き込むデータ
-	@return	書き込み結果
-	@retval	TRUE	成功
-	@retval	FALSE	失敗
--------------------------------------------------------- */
-static bool_t xether_ep0_phy_write(uint8_t reg_addr, uint16_t data)
+static inline uint32_t rx_ring_next(uint32_t idx)
 {
-	return ((NETC_MDIOWrite(&s_xether_ep0_mdio_handle, XETHER_EP0_PHY_ADDR, reg_addr, data) == kStatus_Success) ? TRUE : FALSE);
+    return (idx + 1U) % NETC_HAL_RX_BD_NUM;
 }
 
+int netc_hal_init(const netc_hal_init_params_t *params, netc_hal_ctx_t **out_ctx)
+{
+    assert(params != NULL);
+    assert(params->ep_handle != NULL);
+    assert(out_ctx != NULL);
+
+    struct netc_hal_ctx *ctx = &s_ctx;
+    memset(ctx, 0, sizeof(*ctx));
+
+    ctx->ep     = (netc_ep_handle_t *)params->ep_handle;
+    ctx->si_idx = params->si_idx;
+    memcpy(ctx->mac_addr, params->mac_addr, 6U);
+
+    /* ----------------------------------------------------------------
+     * BDリングをSDKに登録する
+     *
+     * NXP SDK では NETC_EnetcActiveSIBaseConfig() などで
+     * BDリングのアドレス・深さを設定する。
+     * 以下は SDK API のラッパー呼び出し例。
+     * 実際の API 名・引数はSDKバージョンに合わせて変更すること。
+     * ---------------------------------------------------------------- */
+    netc_si_ring_config_t ring_cfg = {
+        .rxRingConfig[0] = {
+            .bdArray    = s_rx_bds,
+            .len        = NETC_HAL_RX_BD_NUM,
+            .extendLen  = 0U,
+        },
+        .txRingConfig[0] = {
+            .bdArray    = s_tx_bds,
+            .len        = NETC_HAL_TX_BD_NUM,
+        },
+    };
+
+    status_t status = NETC_EnetcConfigureSIRing(ctx->ep, params->si_idx, &ring_cfg);
+    if (status != kStatus_Success) {
+        return -1;
+    }
+
+    /* RX BDにDMAバッファを事前に登録する（ゼロコピーRXの要） */
+    for (uint32_t i = 0U; i < NETC_HAL_RX_BD_NUM; i++) {
+        status = NETC_EnetcSetRxBufferAddr(ctx->ep,
+                                           params->si_idx,
+                                           /*ring=*/0U,
+                                           /*bd_idx=*/i,
+                                           s_rx_bufs[i]);
+        if (status != kStatus_Success) {
+            return -1;
+        }
+    }
+
+    ctx->rx_cons_idx = 0U;
+    ctx->tx_prod_idx = 0U;
+    ctx->tx_cons_idx = 0U;
+
+    *out_ctx = ctx;
+    return 0;
+}
+
+void netc_hal_deinit(netc_hal_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+    /* TX保留中のpbufをすべて解放（pbuf_free はlwIPのAPI。依存を避けるため
+     * コールバック形式にしたい場合はパラメータで関数ポインタを受け取ること） */
+    for (uint32_t i = 0U; i < NETC_HAL_TX_BD_NUM; i++) {
+        ctx->tx_pending[i].pbuf   = NULL;
+        ctx->tx_pending[i].in_use = false;
+    }
+}
+
+bool netc_hal_rx_poll(netc_hal_ctx_t *ctx, netc_hal_rx_frame_t *frame)
+{
+    assert(ctx != NULL);
+    assert(frame != NULL);
+
+    uint16_t frame_len = 0U;
+
+    /*
+     * NETC_EnetcGetRxFrame() はBDリングをチェックし、
+     * 受信済みならバッファアドレスと長さを返す。
+     * 戻り値 kStatus_NoData のときは受信なし。
+     *
+     * ゼロコピー: データはすでに s_rx_bufs[bd_idx] にある。
+     *             このポインタをそのまま呼び出し元に渡す。
+     */
+    netc_rx_frame_attr_t attr = {0};
+    status_t st = NETC_EnetcGetRxFrame(ctx->ep,
+                                        ctx->si_idx,
+                                        /*ring=*/0U,
+                                        ctx->rx_cons_idx,
+                                        &frame_len,
+                                        &attr);
+    if (st == kStatus_NoData) {
+        return false;
+    }
+    if (st != kStatus_Success) {
+        /* エラーフレーム: BDを進めてスキップ */
+        ctx->rx_cons_idx = rx_ring_next(ctx->rx_cons_idx);
+        return false;
+    }
+
+    frame->data   = s_rx_bufs[ctx->rx_cons_idx];
+    frame->length = frame_len;
+    frame->bd_idx = ctx->rx_cons_idx;
+
+    /* cons_idx を進める（返却はnetc_hal_rx_release()で行う） */
+    ctx->rx_cons_idx = rx_ring_next(ctx->rx_cons_idx);
+
+    return true;
+}
+
+void netc_hal_rx_release(netc_hal_ctx_t *ctx, const netc_hal_rx_frame_t *frame)
+{
+    assert(ctx != NULL);
+    assert(frame != NULL);
+
+    /*
+     * BDをHWに返却する（同じバッファアドレスを再設定し、
+     * BD の ownerビットをHWに渡す）。
+     */
+    (void)NETC_EnetcSetRxBufferAddr(ctx->ep,
+                                     ctx->si_idx,
+                                     /*ring=*/0U,
+                                     frame->bd_idx,
+                                     frame->data);
+
+    /* HW に BD 再利用を通知するプロデューサリングをインクリメント */
+    NETC_EnetcRefillRxRing(ctx->ep, ctx->si_idx, /*ring=*/0U, /*count=*/1U);
+}
+
+int netc_hal_tx_send(netc_hal_ctx_t *ctx, const netc_hal_tx_frame_t *frame)
+{
+    assert(ctx != NULL);
+    assert(frame != NULL);
+    assert(frame->data != NULL);
+
+    /* TXリング満杯チェック */
+    uint32_t next_prod = tx_ring_next(ctx->tx_prod_idx);
+    if (next_prod == ctx->tx_cons_idx) {
+        /* リング満杯：呼び出し元はtx_reclaim後に再試行すること */
+        return -1;
+    }
+
+    /* pbufポインタを保存（TX完了後のpbuf_free用） */
+    ctx->tx_pending[ctx->tx_prod_idx].pbuf   = frame->pbuf;
+    ctx->tx_pending[ctx->tx_prod_idx].in_use = true;
+
+    /*
+     * BDにペイロードポインタをセットしてDMA起動。
+     * ゼロコピー: pbuf->payload をそのままBDに渡す。
+     *             SDKが物理アドレスへの変換を行う（RT1180はフラットマップ）。
+     */
+    netc_tx_frame_info_t tx_info = {
+        .dataAddr = (uint32_t)(uintptr_t)frame->data,
+        .dataLen  = frame->length,
+        .flags    = 0U,    /* チェックサムオフロード等が必要なら設定 */
+    };
+
+    status_t st = NETC_EnetcSendFrame(ctx->ep,
+                                       ctx->si_idx,
+                                       /*ring=*/0U,
+                                       &tx_info,
+                                       ctx->tx_prod_idx);
+    if (st != kStatus_Success) {
+        ctx->tx_pending[ctx->tx_prod_idx].in_use = false;
+        ctx->tx_pending[ctx->tx_prod_idx].pbuf   = NULL;
+        return -1;
+    }
+
+    ctx->tx_prod_idx = next_prod;
+    return 0;
+}
+
+void netc_hal_tx_reclaim(netc_hal_ctx_t *ctx)
+{
+    assert(ctx != NULL);
+
+    /*
+     * TX完了済みBDを回収する。
+     * NETC_EnetcReclaimTxDescriptor() は完了したBD数を返す。
+     */
+    uint32_t reclaimed = 0U;
+    (void)NETC_EnetcReclaimTxDescriptor(ctx->ep,
+                                          ctx->si_idx,
+                                          /*ring=*/0U,
+                                          &reclaimed);
+
+    for (uint32_t i = 0U; i < reclaimed; i++) {
+        if (ctx->tx_pending[ctx->tx_cons_idx].in_use) {
+            /* pbufはethernetif.cでlwIP APIを使って解放する。
+             * ここではNULLクリアのみ。実際のpbuf_freeは
+             * ethernetif_tx_reclaim() 経由で呼ぶ設計とする。 */
+            ctx->tx_pending[ctx->tx_cons_idx].in_use = false;
+            /* pbuf ポインタは呼び出し元 (ethernetif) が読み取って解放する */
+        }
+        ctx->tx_cons_idx = tx_ring_next(ctx->tx_cons_idx);
+    }
+}
+
+bool netc_hal_link_is_up(netc_hal_ctx_t *ctx)
+{
+    assert(ctx != NULL);
+
+    netc_port_phy_status_t phy_status = {0};
+    status_t st = NETC_EnetcGetPortPhyStatus(ctx->ep, ctx->si_idx, &phy_status);
+    if (st != kStatus_Success) {
+        return false;
+    }
+    return (bool)phy_status.linkUp;
+}
+
+void netc_hal_get_mac(netc_hal_ctx_t *ctx, uint8_t mac[6])
+{
+    assert(ctx != NULL);
+    assert(mac != NULL);
+    memcpy(mac, ctx->mac_addr, 6U);
+}
+/* ------------------------------------------------------------------ */
+/* ゼロコピーRX用カスタムpbuf                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief ゼロコピーRX用カスタムpbuf拡張構造体
+ *
+ * pbuf_alloced_custom() でDMAバッファをラップする際に使用する。
+ * pbuf の参照カウントが 0 になると lwIP が custom_free_function を呼び出し、
+ * その中でDMAバッファをHWに返却する。
+ *
+ * 必ず先頭メンバを struct pbuf_custom にすること（lwIP要件）。
+ */
+typedef struct {
+    struct pbuf_custom  pbuf_custom;  /**< 先頭固定（lwIP要件）           */
+    netc_hal_rx_frame_t rx_frame;     /**< HW返却に必要なBD情報           */
+} xether_rx_zc_pbuf_t;
+
+/** カスタムpbufプール（BDリング深さと1対1に対応させる） */
+static xether_rx_zc_pbuf_t s_rx_zc_pool[NETC_HAL_RX_BUF_NUM];
+static bool                s_rx_zc_in_use[NETC_HAL_RX_BUF_NUM];
+
+/**
+ * @brief カスタムpbuf解放コールバック（lwIPから呼ばれる）
+ *
+ * pbuf の参照カウントが 0 になったとき lwIP が呼び出す。
+ * DMAバッファをHWに返却し、プールスロットを空きに戻す。
+ */
+static void xether_rx_pbuf_free_custom(struct pbuf *p)
+{
+    xether_rx_zc_pbuf_t *slot = (xether_rx_zc_pbuf_t *)p;
+
+    /* DMAバッファをHWのBDリングに返却する */
+    netc_hal_rx_release(g_xether_board.hal_ctx, &slot->rx_frame);
+
+    /* プールスロットを空きに戻す */
+    for (uint32_t i = 0U; i < NETC_HAL_RX_BUF_NUM; i++) {
+        if (&s_rx_zc_pool[i] == slot) {
+            s_rx_zc_in_use[i] = false;
+            break;
+        }
+    }
+}
+
+/**
+ * @brief カスタムpbufプールからスロットを1件確保する
+ * @return 確保したスロット、プール枯渇時は NULL
+ */
+static xether_rx_zc_pbuf_t *xether_rx_zc_alloc(void)
+{
+    for (uint32_t i = 0U; i < NETC_HAL_RX_BUF_NUM; i++) {
+        if (!s_rx_zc_in_use[i]) {
+            s_rx_zc_in_use[i] = true;
+            return &s_rx_zc_pool[i];
+        }
+    }
+    return NULL;
+}
+
+/** ETH0〜ETH3（SWT）PHYハンドル */
+static struct {
+    phy_rtl8211f_resource_t resource;
+    phy_handle_t             handle;
+} g_xether_swt_phy[4U]; /* インデックス0〜3 = ETH0〜ETH3 */
+
+/* ------------------------------------------------------------------ */
+/* 内部ユーティリティ                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief ミリ秒待機（ビジーウェイト）
+ * SDK_DelayAtLeastUs が利用できる環境ではそちらに置き換えること。
+ */
+static inline void xether_delay_ms(uint32_t ms)
+{
+    SDK_DelayAtLeastUs(ms * 1000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+}
 
 /** -------------------------------------------------------
 	@brief	MIMXRT1180-EVKのETH4の初期化して通信できる状態にする
@@ -115,106 +512,82 @@ static bool_t xether_ep0_phy_write(uint8_t reg_addr, uint16_t data)
 -------------------------------------------------------- */
 static bool_t xether_netc_ep0_open(const xether_config_t *config)
 {
-	netc_bdr_config_t			bdr_config;
-	netc_rx_bdr_config_t		rx_bdr_config;
-	netc_tx_bdr_config_t		tx_bdr_config;
-	ep_config_t					ep_config;
-	netc_mdio_config_t			mdio_config;
-	uint16_t					bcr;
-	uint32_t					i;
-	uint32_t					timeout;
+    if (config == NULL) {
+        return (FALSE);
+    }
 
-	if ((config == NULL) || (s_xether_ep0_is_opened != FALSE))
-	{
-		return (FALSE);
-	}
+    /* 二重オープン防止 */
+    if (g_xether_board.opened == TRUE) {
+        return (TRUE);
+    }
 
-	(void)memset(&bdr_config, 0, sizeof(bdr_config));
-	(void)memset(&rx_bdr_config, 0, sizeof(rx_bdr_config));
-	(void)memset(&tx_bdr_config, 0, sizeof(tx_bdr_config));
-	(void)memset(&mdio_config, 0, sizeof(mdio_config));
+    /* ----------------------------------------------------------------
+     * NETC ENETC EP0 初期化
+     *
+     * クロック・PINMUXは xether_init_board() で完了済み前提。
+     * ここではBDリング以外のENETC基本設定を行う。
+     * ---------------------------------------------------------------- */
+    netc_endpoint_config_t ep_cfg;
+    (void)memset(&ep_cfg, 0, sizeof(ep_cfg));
 
-	/* --- MDIO(PHYとのSMI通信バス)の初期化 --- */
-	mdio_config.srcClockHz = XETHER_EP0_MDIO_SRC_CLOCK_HZ;
+    /* MACアドレス設定 */
+    (void)memcpy(ep_cfg.si[0U].macAddr.addr, config->mac_addr, 6U);
 
-	if (NETC_MDIOInit(&s_xether_ep0_mdio_handle, &mdio_config) != kStatus_Success)
-	{
-		return (FALSE);
-	}
+    /* RGMIIポート設定（ETH4 = EP0ポート） */
+    ep_cfg.port.ethMac.miiMode   = kNETC_RgmiiMode;
+    ep_cfg.port.ethMac.miiSpeed  = kNETC_MiiSpeed1000M;
+    ep_cfg.port.ethMac.miiDuplex = kNETC_MiiFullDuplex;
 
-	/* --- PHY(RTL8201FI-VC-CG)のソフトウェアリセット --- */
-	if (xether_ep0_phy_write(XETHER_PHY_REG_BCR, XETHER_PHY_BCR_RESET) == FALSE)
-	{
-		return (FALSE);
-	}
+    status_t st = NETC_EnetcInit(&g_xether_board.ep_handle, &ep_cfg);
+    if (st != kStatus_Success) {
+        return (FALSE);
+    }
 
-	timeout = 0;
-	bcr = XETHER_PHY_BCR_RESET;
-	while (((bcr & XETHER_PHY_BCR_RESET) != 0U) && (timeout < XETHER_PHY_RESET_TIMEOUT_COUNT))
-	{
-		if (xether_ep0_phy_read(XETHER_PHY_REG_BCR, &bcr) == FALSE)
-		{
-			return (FALSE);
-		}
-		timeout++;
-	}
+    /* ----------------------------------------------------------------
+     * PHY 初期化（RTL8211FDI-CG）
+     *
+     * MDIOアクセスリソースをPHYドライバに登録する。
+     * xether_init_board() でMDIOコントローラは初期化済み。
+     * ---------------------------------------------------------------- */
+    g_xether_board.phy_resource.write = NETC_MDIOWrite;
+    g_xether_board.phy_resource.read  = NETC_MDIORead;
 
-	if ((bcr & XETHER_PHY_BCR_RESET) != 0U)
-	{
-		/* リセットが完了しなかった */
-		return (FALSE);
-	}
+    phy_config_t phy_cfg = {
+        .phyAddr  = config->phy_addr,
+        .autoNeg  = true,
+        .speed    = kPHY_Speed1000M,
+        .duplex   = kPHY_FullDuplex,
+    };
 
-	/* --- オートネゴシエーションの開始(10/100M, 全二重/半二重を許容) --- */
-	(void)xether_ep0_phy_write(XETHER_PHY_REG_ANAR,
-								(uint16_t)(XETHER_PHY_ANAR_100_FULL | XETHER_PHY_ANAR_100_HALF |
-										   XETHER_PHY_ANAR_10_FULL  | XETHER_PHY_ANAR_10_HALF  |
-										   XETHER_PHY_ANAR_802_3));
-	(void)xether_ep0_phy_write(XETHER_PHY_REG_BCR,
-								(uint16_t)(XETHER_PHY_BCR_AUTONEG_EN | XETHER_PHY_BCR_RESTART_AUTONEG));
+    st = PHY_RTL8211F_Init(&g_xether_board.phy_handle,
+                            &g_xether_board.phy_resource,
+                            &phy_cfg);
+    if (st != kStatus_Success) {
+        return (FALSE);
+    }
 
-	/* --- 受信リングの初期化(ディスクリプタとバッファアドレスの紐付け) --- */
-	for (i = 0; i < XETHER_EP0_RX_RING_LEN; i++)
-	{
-		s_xether_ep0_rx_buff_addr[i] = &s_xether_ep0_rx_buff[i][0];
-	}
+    /* ----------------------------------------------------------------
+     * HAL 初期化（BDリング / DMAバッファセットアップ）
+     *
+     * ペリフェラル初期化済みの ep_handle を注入する。
+     * ---------------------------------------------------------------- */
+    netc_hal_init_params_t hal_params;
+    (void)memset(&hal_params, 0, sizeof(hal_params));
 
-	/*
-	 * TODO: netc_rx_bdr_config_t / netc_tx_bdr_config_t のメンバ名は
-	 *       実際の fsl_netc_endpoint.h の定義に合わせて確認・修正すること。
-	 *       (bdArray, len, buffAddrArray, buffSize 等は代表的な命名から推測したもの)
-	 */
-	rx_bdr_config.bdArray       = &s_xether_ep0_rx_bd[0];
-	rx_bdr_config.len           = XETHER_EP0_RX_RING_LEN;
-	rx_bdr_config.buffAddrArray = &s_xether_ep0_rx_buff_addr[0];
-	rx_bdr_config.buffSize      = XETHER_EP0_RX_BUFF_SIZE;
-	rx_bdr_config.extendDescEn  = false;
+    hal_params.ep_handle = &g_xether_board.ep_handle;
+    hal_params.si_idx    = config->si_idx;
+    (void)memcpy(hal_params.mac_addr, config->mac_addr, 6U);
 
-	tx_bdr_config.bdArray       = &s_xether_ep0_tx_bd[0];
-	tx_bdr_config.len           = XETHER_EP0_TX_RING_LEN;
+    int ret = netc_hal_init(&hal_params, &g_xether_board.hal_ctx);
+    if (ret != 0) {
+        return (FALSE);
+    }
 
-	bdr_config.rxBdrConfig[0] = rx_bdr_config;
-	bdr_config.txBdrConfig[0] = tx_bdr_config;
+    /* 初期リンクステータス取得 */
+    g_xether_board.last_link_up = (bool_t)netc_hal_link_is_up(g_xether_board.hal_ctx);
+    g_xether_board.opened       = TRUE;
 
-	/* --- NETCエンドポイント(ETH4/EP0)本体の初期化 --- */
-	EP_GetDefaultConfig(&ep_config);
-	ep_config.si                    = 0U;
-	ep_config.siConfig.txRingUse     = 1U;
-	ep_config.siConfig.rxRingUse     = 1U;
-	/* RTL8201FI-VC-CGは10/100M専用PHYのためRMII接続を使用する */
-	ep_config.port.ethMac.miiMode    = kNETC_RmiiMode;
-	ep_config.port.ethMac.miiSpeed   = kNETC_MiiSpeed100M;
-	ep_config.port.ethMac.miiDuplex  = kNETC_MiiFullDuplex;
-
-	if (EP_Init(&s_xether_ep0_handle, (uint8_t *)&config->mac_addr.addr[0], &ep_config, &bdr_config) != kStatus_Success)
-	{
-		return (FALSE);
-	}
-
-	g_xether_board.last_link_up = FALSE;
-	s_xether_ep0_is_opened = TRUE;
-
-	return (TRUE);
+    return (TRUE);
 }
 
 /** -------------------------------------------------------
@@ -227,20 +600,28 @@ static bool_t xether_netc_ep0_open(const xether_config_t *config)
 -------------------------------------------------------- */
 static void xether_netc_ep0_close(void)
 {
-	if (s_xether_ep0_is_opened == FALSE)
-	{
-		return;
-	}
+    if (g_xether_board.opened == FALSE) {
+        return;
+    }
 
-	/* PHYをパワーダウン状態にする */
-	(void)xether_ep0_phy_write(XETHER_PHY_REG_BCR, XETHER_PHY_BCR_POWER_DOWN);
+    /* HAL リソース解放（TX pending pbuf のクリア） */
+    if (g_xether_board.hal_ctx != NULL) {
+        netc_hal_deinit(g_xether_board.hal_ctx);
+        g_xether_board.hal_ctx = NULL;
+    }
 
-	/* NETCエンドポイントの終了処理 */
-	/* TODO: 関数名(EP_Deinit)は fsl_netc_endpoint.h の実際の宣言に合わせて確認すること */
-	(void)EP_Deinit(&s_xether_ep0_handle);
+    /* PHY をパワーダウンモードへ
+     * RTL8211FではPHY_Write でパワーダウンビットを立てる。
+     * SDKがPHY_PowerDown相当のAPIを提供していればそちらを使うこと。 */
+    (void)PHY_RTL8211F_Write(&g_xether_board.phy_handle,
+                              PHY_BASICCONTROL_REG,
+                              PHY_BCTL_POWER_DOWN_MASK);
 
-	s_xether_ep0_is_opened = FALSE;
-	g_xether_board.last_link_up = FALSE;
+    /* ENETC EP0 を停止する */
+    (void)NETC_EnetcDeinit(&g_xether_board.ep_handle);
+
+    g_xether_board.last_link_up = FALSE;
+    g_xether_board.opened       = FALSE;
 }
 
 /** -------------------------------------------------------
@@ -253,52 +634,62 @@ static void xether_netc_ep0_close(void)
 -------------------------------------------------------- */
 static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 {
-	netc_frame_attr_t			attr;
-	struct pbuf					*p;
-	uint32_t					length;
-	status_t					rx_result;
+    if (g_xether_board.opened == FALSE) {
+        return (NULL);
+    }
 
-	if (s_xether_ep0_is_opened == FALSE)
-	{
-		return (NULL);
-	}
+    /* HALから受信フレームをポーリング（ゼロコピー） */
+    netc_hal_rx_frame_t rx_frame;
+    if (!netc_hal_rx_poll(g_xether_board.hal_ctx, &rx_frame)) {
+        /* 受信フレームなし */
+        return (NULL);
+    }
 
-	(void)memset(&attr, 0, sizeof(attr));
+    /* ----------------------------------------------------------------
+     * ゼロコピーRX: DMAバッファをコピーせず pbuf_alloced_custom() でラップ。
+     *
+     * DMAバッファ（s_rx_bufs[bd_idx]）はpbufのpayloadとして直接公開される。
+     * lwIPスタックがpbufを使い終わって pbuf_free() を呼ぶと、
+     * 参照カウントが 0 になった時点で xether_rx_pbuf_free_custom() が呼ばれ、
+     * DMAバッファが自動的にHWのBDリングに返却される。
+     * ---------------------------------------------------------------- */
 
-	/* 受信フレームの有無とサイズを確認する。フレームが無ければ即座に応答する */
-	rx_result = EP_GetRxFrameSize(&s_xether_ep0_handle, 0U, &length);
-	if (rx_result == kStatus_NETC_RxFrameEmpty)
-	{
-		return (NULL);
-	}
+    /* カスタムpbufスロットを確保する */
+    xether_rx_zc_pbuf_t *slot = xether_rx_zc_alloc();
+    if (slot == NULL) {
+        /* プール枯渇: DMAバッファをHWに即返却してドロップ */
+        netc_hal_rx_release(g_xether_board.hal_ctx, &rx_frame);
+        return (NULL);
+    }
 
-	if ((rx_result != kStatus_Success) || (length == 0U) || (length > sizeof(s_xether_ep0_rx_scratch)))
-	{
-		/* 異常なフレームはリングから読み捨てる */
-		(void)EP_ReceiveFrameCopy(&s_xether_ep0_handle, 0U, s_xether_ep0_rx_scratch,
-								   sizeof(s_xether_ep0_rx_scratch), &attr);
-		return (NULL);
-	}
+    /* スロットにBD情報を保存（解放コールバックでHW返却に使う） */
+    slot->rx_frame = rx_frame;
+    slot->pbuf_custom.custom_free_function = xether_rx_pbuf_free_custom;
 
-	if (EP_ReceiveFrameCopy(&s_xether_ep0_handle, 0U, s_xether_ep0_rx_scratch, length, &attr) != kStatus_Success)
-	{
-		return (NULL);
-	}
+    /*
+     * pbuf_alloced_custom():
+     *   PBUF_REF  : 外部バッファを参照する（内部コピーなし）
+     *   payload   : DMAバッファのアドレスをそのまま渡す
+     *   tot_len   : 受信フレーム長
+     *   max_len   : バッファの物理サイズ（NETC_HAL_MAX_FRAME_SIZE）
+     */
+    struct pbuf *p = pbuf_alloced_custom(
+        PBUF_RAW,
+        (uint16_t)rx_frame.length,
+        PBUF_REF,
+        &slot->pbuf_custom,
+        rx_frame.data,
+        NETC_HAL_MAX_FRAME_SIZE
+    );
 
-	p = pbuf_alloc(PBUF_RAW, (u16_t)length, PBUF_POOL);
-	if (p == NULL)
-	{
-		/* pbuf確保に失敗した場合はフレームを読み捨てて終了する */
-		return (NULL);
-	}
+    if (p == NULL) {
+        /* pbuf_alloced_custom 失敗: スロットとDMAバッファを両方返却 */
+        s_rx_zc_in_use[slot - s_rx_zc_pool] = false;
+        netc_hal_rx_release(g_xether_board.hal_ctx, &rx_frame);
+        return (NULL);
+    }
 
-	if (pbuf_take(p, s_xether_ep0_rx_scratch, (u16_t)length) != (err_t)ERR_OK)
-	{
-		(void)pbuf_free(p);
-		return (NULL);
-	}
-
-	return (p);
+    return (p);
 }
 
 /** -------------------------------------------------------
@@ -310,46 +701,38 @@ static struct pbuf *xether_netc_ep0_recv_packet_get(void)
 -------------------------------------------------------- */
 static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 {
-	netc_buffer_struct_t		buff_list[XETHER_EP0_TX_MAX_SEGMENT];
-	netc_frame_struct_t			frame;
-	ep_tx_opt					opt;
-	struct pbuf					*q;
-	uint32_t					seg_num;
-	status_t					result;
+    if ((g_xether_board.opened == FALSE) || (p == NULL)) {
+        return (FALSE);
+    }
 
-	if ((s_xether_ep0_is_opened == FALSE) || (p == NULL))
-	{
-		return (FALSE);
-	}
+    /* TX reclaim：前回送信完了済みBDを回収してpbufを解放する */
+    netc_hal_tx_reclaim(g_xether_board.hal_ctx);
 
-	(void)memset(&opt, 0, sizeof(opt));
+    /* ----------------------------------------------------------------
+     * ゼロコピーTX: pbuf->payload ポインタをBDに直接セットしてDMA送信。
+     *
+     * チェーンpbufはセグメントごとに個別にキューに積む。
+     * DMA完了まで pbuf が解放されないよう pbuf_ref() で保護する。
+     * ---------------------------------------------------------------- */
+    for (struct pbuf *q = p; q != NULL; q = q->next) {
+        /* DMA完了まで pbuf を保護 */
+        pbuf_ref(q);
 
-	/* pbufチェイン(複数セグメント)をNETCのバッファリストへ変換する */
-	seg_num = 0;
-	for (q = p; q != NULL; q = q->next)
-	{
-		if (seg_num >= XETHER_EP0_TX_MAX_SEGMENT)
-		{
-			/* バッファリストの上限を超えるフレームは送信できない */
-			return (FALSE);
-		}
+        netc_hal_tx_frame_t tx_frame = {
+            .data   = (const uint8_t *)q->payload,
+            .length = (uint16_t)q->len,
+            .pbuf   = q,    /* reclaim時に pbuf_free() するために保持 */
+        };
 
-		buff_list[seg_num].buffer = (uint8_t *)q->payload;
-		buff_list[seg_num].length = (uint16_t)q->len;
-		seg_num++;
-	}
+        int ret = netc_hal_tx_send(g_xether_board.hal_ctx, &tx_frame);
+        if (ret != 0) {
+            /* TXリング満杯: 参照カウントを戻して失敗返却 */
+            pbuf_free(q);
+            return (FALSE);
+        }
+    }
 
-	if (seg_num == 0U)
-	{
-		return (FALSE);
-	}
-
-	frame.buffArray = &buff_list[0];
-	frame.length    = (uint8_t)seg_num;
-
-	result = EP_SendFrame(&s_xether_ep0_handle, 0U, &frame, NULL, &opt);
-
-	return ((result == kStatus_Success) ? TRUE : FALSE);
+    return (TRUE);
 }
 
 /** -------------------------------------------------------
@@ -362,78 +745,27 @@ static bool_t xether_netc_ep0_send_packet_set(struct pbuf *p)
 -------------------------------------------------------- */
 static bool_t xether_netc_ep0_link_status_update(void)
 {
-	uint16_t					bsr;
-	uint16_t					anar;
-	uint16_t					anlpar;
-	uint16_t					common_ability;
-	bool_t						link_up;
+    if (g_xether_board.opened == FALSE) {
+        return (FALSE);
+    }
 
-	if (s_xether_ep0_is_opened == FALSE)
-	{
-		return (FALSE);
-	}
+    /* PHYからリンク状態を直接取得する */
+    bool link_up_raw = false;
+    status_t st = PHY_RTL8211F_GetLinkStatus(&g_xether_board.phy_handle,
+                                               &link_up_raw);
+    if (st != kStatus_Success) {
+        return (FALSE);
+    }
 
-	/*
-	 * BSR(Basic Status Register)のLink Statusビットはラッチ動作のため、
-	 * 最新の状態を得るために2回連続で読み出す(標準的なPHYの作法)。
-	 */
-	if (xether_ep0_phy_read(XETHER_PHY_REG_BSR, &bsr) == FALSE)
-	{
-		return (FALSE);
-	}
-	if (xether_ep0_phy_read(XETHER_PHY_REG_BSR, &bsr) == FALSE)
-	{
-		return (FALSE);
-	}
+    bool_t link_up = link_up_raw ? TRUE : FALSE;
 
-	link_up = ((bsr & XETHER_PHY_BSR_LINK_STATUS) != 0U) ? TRUE : FALSE;
+    /* 前回値と比較して変化があれば更新 */
+    if (link_up == g_xether_board.last_link_up) {
+        return (FALSE);
+    }
 
-	if (link_up == g_xether_board.last_link_up)
-	{
-		/* 変化なし */
-		return (FALSE);
-	}
-
-	if ((link_up != FALSE) && ((bsr & XETHER_PHY_BSR_AUTONEG_COMPLETE) != 0U))
-	{
-		netc_hw_mii_speed_t			mii_speed  = kNETC_MiiSpeed100M;
-		netc_hw_mii_duplex_t			mii_duplex = kNETC_MiiFullDuplex;
-
-		/* 自ノードと相手ノードの共通のオートネゴシエーション能力から速度・全二重/半二重を決定する */
-		if ((xether_ep0_phy_read(XETHER_PHY_REG_ANAR, &anar) != FALSE) &&
-			(xether_ep0_phy_read(XETHER_PHY_REG_ANLPAR, &anlpar) != FALSE))
-		{
-			common_ability = (uint16_t)(anar & anlpar);
-
-			if ((common_ability & XETHER_PHY_ANAR_100_FULL) != 0U)
-			{
-				mii_speed  = kNETC_MiiSpeed100M;
-				mii_duplex = kNETC_MiiFullDuplex;
-			}
-			else if ((common_ability & XETHER_PHY_ANAR_100_HALF) != 0U)
-			{
-				mii_speed  = kNETC_MiiSpeed100M;
-				mii_duplex = kNETC_MiiHalfDuplex;
-			}
-			else if ((common_ability & XETHER_PHY_ANAR_10_FULL) != 0U)
-			{
-				mii_speed  = kNETC_MiiSpeed10M;
-				mii_duplex = kNETC_MiiFullDuplex;
-			}
-			else
-			{
-				mii_speed  = kNETC_MiiSpeed10M;
-				mii_duplex = kNETC_MiiHalfDuplex;
-			}
-		}
-
-		/* NETC側のMAC速度・デュプレックス設定をリンクアップ後の値に合わせる */
-		(void)EP_Up(&s_xether_ep0_handle, mii_speed, mii_duplex);
-	}
-
-	g_xether_board.last_link_up = link_up;
-
-	return (TRUE);
+    g_xether_board.last_link_up = link_up;
+    return (TRUE);
 }
 
 /** -------------------------------------------------------
@@ -441,40 +773,84 @@ static bool_t xether_netc_ep0_link_status_update(void)
 -------------------------------------------------------- */
 static inline void xether_init_board(void)
 {
-	/*
-	 * TODO: 以下はテンプレートである。MIMXRT1180-EVKの回路図およびMCUXpresso Config Tools
-	 *       (pin_mux.c / clock_config.c) が生成する実際のピン名・GPIOポート・クロック名に
-	 *       置き換えること。
-	 *
-	 *       想定している処理内容:
-	 *       1) NETC/GPIO関連クロックの有効化
-	 *       2) ETH0~ETH4用ピン(RGMII/RMII/MDIO)のピンマルチプレクス設定
-	 *       3) 各PHYのリセットピンをGPIO出力として初期化し、リセットパルスを与える
-	 *          (Low >= 10ms 保持 -> High、RTL8201FIのデータシートのリセットタイミング要件に従う)
-	 */
+    /* ----------------------------------------------------------------
+     * 1. PHY RESET GPIO 初期化
+     *
+     * EVKではGPIO13_IO16が全PHY（ETH0〜ETH4）共通のRESETピン。
+     * アクティブLowのため、まずLowにしてリセットを印加する。
+     * ---------------------------------------------------------------- */
+    gpio_pin_config_t gpio_out_cfg = {
+        .direction     = kGPIO_DigitalOutput,
+        .outputLogic   = XETHER_PHY_RESET_ASSERT,   /* 初期値=Low（リセット中）*/
+        .interruptMode = kGPIO_NoIntmode,
+    };
+    GPIO_PinInit(XETHER_PHY_RESET_GPIO, XETHER_PHY_RESET_PIN, &gpio_out_cfg);
 
-	/* 1) クロック有効化 */
-	CLOCK_EnableClock(kCLOCK_Netc);						/* TODO: 実際のクロック名に置き換える */
+    /* RESETパルス幅ウェイト（RTL8211F: tRSTLOW >= 10ms） */
+    xether_delay_ms(XETHER_PHY_RESET_HOLD_MS);
 
-	/* 2) ピンマルチプレクス設定 (MCUXpresso Config Toolsで生成される関数を想定) */
-	BOARD_InitPins();										/* TODO: 実際の関数名に置き換える */
+    /* RESETをDeassert（High）してリセット解除 */
+    GPIO_PinWrite(XETHER_PHY_RESET_GPIO, XETHER_PHY_RESET_PIN, XETHER_PHY_RESET_DEASSERT);
 
-	/* 3) ETH4 (RTL8201FI-VC-CG) のPHYリセット */
-	{
-		gpio_pin_config_t		reset_pin_config;
+    /* PHY安定待ち（RTL8211F: tRSTHOLD >= 30ms） */
+    xether_delay_ms(XETHER_PHY_RESET_STABLE_MS);
 
-		reset_pin_config.direction     = kGPIO_DigitalOutput;
-		reset_pin_config.outputLogic   = 0U;				/* リセット(Low)状態から開始 */
-		reset_pin_config.interruptMode = kGPIO_NoIntmode;
+    /* ----------------------------------------------------------------
+     * 2. NETC EMDIO コントローラ初期化
+     *
+     * ETH0〜ETH4全PHYのMDIOアクセスに共通使用する。
+     * クロック設定はclock_config.c / BOARD_InitNETCClocks() 済み前提。
+     * ---------------------------------------------------------------- */
+    netc_mdio_config_t mdio_cfg = {
+        .mdioClkHz  = 2500000U,   /* MDIO clock: 2.5 MHz（IEEE802.3規定上限）*/
+        .isPreamble = true,
+    };
+    (void)NETC_MDIOInit(&mdio_cfg);
 
-		/* TODO: BOARD_ETH4_PHY_RST_GPIO / BOARD_ETH4_PHY_RST_PIN は実際の定義に置き換える */
-		GPIO_PinInit(BOARD_ETH4_PHY_RST_GPIO, BOARD_ETH4_PHY_RST_PIN, &reset_pin_config);
+    /* ----------------------------------------------------------------
+     * 3. ETH0〜ETH3（NETC SWT PORT0〜3）のPHY初期化
+     *
+     * スイッチポートのMACは NETC_SwtInit() で設定する。
+     * ここではPHYのリンクアップのみ行い、SWT本体の設定はアプリ責務とする。
+     * ---------------------------------------------------------------- */
+    static const uint32_t swt_phy_addr[4U] = {
+        XETHER_ETH0_PHY_ADDR,
+        XETHER_ETH1_PHY_ADDR,
+        XETHER_ETH2_PHY_ADDR,
+        XETHER_ETH3_PHY_ADDR,
+    };
 
-		GPIO_PinWrite(BOARD_ETH4_PHY_RST_GPIO, BOARD_ETH4_PHY_RST_PIN, 0U);
-		SDK_DelayAtLeastUs(10000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
-		GPIO_PinWrite(BOARD_ETH4_PHY_RST_GPIO, BOARD_ETH4_PHY_RST_PIN, 1U);
-		SDK_DelayAtLeastUs(10000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
-	}
+    for (uint32_t i = 0U; i < 4U; i++) {
+        g_xether_swt_phy[i].resource.write = NETC_MDIOWrite;
+        g_xether_swt_phy[i].resource.read  = NETC_MDIORead;
+
+        phy_config_t phy_cfg = {
+            .phyAddr  = swt_phy_addr[i],
+            .autoNeg  = true,
+            .speed    = kPHY_Speed1000M,
+            .duplex   = kPHY_FullDuplex,
+        };
+
+        /* 初期化失敗は無視してアサーション等で検出させる
+         * （ここで止めると他ポートの初期化まで影響するため）*/
+        (void)PHY_RTL8211F_Init(&g_xether_swt_phy[i].handle,
+                                 &g_xether_swt_phy[i].resource,
+                                 &phy_cfg);
+    }
+
+    /* ----------------------------------------------------------------
+     * 4. ETH4（NETC EP0）のENETC基本クロック有効化
+     *
+     * BOARD_InitNETCClocks() が未実施の場合はここで呼ぶ。
+     * SDK のボードファイルで定義されている前提とし、ここでは
+     * 呼び出しのみ行う。
+     * ---------------------------------------------------------------- */
+    BOARD_InitNETCClocks();
+
+    /* ----------------------------------------------------------------
+     * 5. モジュール内部状態のゼロクリア
+     * ---------------------------------------------------------------- */
+    (void)memset(&g_xether_board, 0, sizeof(g_xether_board));
 }
 
 /** -------------------------------------------------------
@@ -482,11 +858,39 @@ static inline void xether_init_board(void)
 -------------------------------------------------------- */
 static inline void xether_deinit_board(void)
 {
-	/* 各PHYをリセット状態(Low)に戻してから、クロックを止める */
-	/* TODO: BOARD_ETH4_PHY_RST_GPIO / BOARD_ETH4_PHY_RST_PIN は実際の定義に置き換える */
-	GPIO_PinWrite(BOARD_ETH4_PHY_RST_GPIO, BOARD_ETH4_PHY_RST_PIN, 0U);
+    /* ----------------------------------------------------------------
+     * 1. ETH4（EP0）が開いていれば閉じる
+     * ---------------------------------------------------------------- */
+    if (g_xether_board.opened == TRUE) {
+        xether_netc_ep0_close();
+    }
 
-	CLOCK_DisableClock(kCLOCK_Netc);						/* TODO: 実際のクロック名に置き換える */
+    /* ----------------------------------------------------------------
+     * 2. ETH0〜ETH3（SWT PORT0〜3）のPHYをパワーダウン
+     * ---------------------------------------------------------------- */
+    for (uint32_t i = 0U; i < 4U; i++) {
+        (void)PHY_RTL8211F_Write(&g_xether_swt_phy[i].handle,
+                                  PHY_BASICCONTROL_REG,
+                                  PHY_BCTL_POWER_DOWN_MASK);
+    }
+
+    /* ----------------------------------------------------------------
+     * 3. PHY RESET GPIO をLow（リセット状態）に戻す
+     *
+     * 全PHYをリセット状態に落とすことで消費電流を抑える。
+     * ---------------------------------------------------------------- */
+    GPIO_PinWrite(XETHER_PHY_RESET_GPIO, XETHER_PHY_RESET_PIN, XETHER_PHY_RESET_ASSERT);
+
+    /* ----------------------------------------------------------------
+     * 4. MDIO コントローラ停止
+     * ---------------------------------------------------------------- */
+    NETC_MDIODeinit();
+
+    /* ----------------------------------------------------------------
+     * 5. 内部状態クリア
+     * ---------------------------------------------------------------- */
+    (void)memset(&g_xether_board, 0, sizeof(g_xether_board));
+    (void)memset(g_xether_swt_phy, 0, sizeof(g_xether_swt_phy));
 }
 
 
